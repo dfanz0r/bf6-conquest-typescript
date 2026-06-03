@@ -1,6 +1,4 @@
 
-import * as modlib from 'modlib';
-
 // ============================================================
 // STATE FOUNDATION (Phase 1)
 // ============================================================
@@ -344,6 +342,103 @@ function removePlayerStateById(playerId: number): void {
 // END STATE FOUNDATION
 // ============================================================
 
+// ============================================================
+// MODLIB REPLACEMENT HELPERS (Phase 3)
+// ============================================================
+
+// --- Condition State ---
+
+class ConditionState {
+    lastState = false;
+
+    update(newState: boolean): boolean {
+        if (!newState) {
+            this.lastState = false;
+            return false;
+        }
+        if (this.lastState) return false;
+        this.lastState = true;
+        return true;
+    }
+}
+
+class Conditions {
+    conditionStates: ConditionState[] = [];
+
+    getConditionState(n: number): ConditionState {
+        while (n >= this.conditionStates.length) {
+            this.conditionStates.push(new ConditionState());
+        }
+        return this.conditionStates[n];
+    }
+}
+
+let globalConditions = new Conditions();
+let playerConditions: Conditions[] = [];
+let capturePointConditions: Conditions[] = [];
+
+function getGlobalCondition(n: number): ConditionState {
+    return globalConditions.getConditionState(n);
+}
+
+function getPlayerCondition(player: mod.Player, n: number): ConditionState {
+    const id = mod.GetObjId(player);
+    while (id >= playerConditions.length) {
+        playerConditions.push(new Conditions());
+    }
+    return playerConditions[id].getConditionState(n);
+}
+
+function getCapturePointCondition(cp: mod.CapturePoint, n: number): ConditionState {
+    const id = mod.GetObjId(cp);
+    while (id >= capturePointConditions.length) {
+        capturePointConditions.push(new Conditions());
+    }
+    return capturePointConditions[id].getConditionState(n);
+}
+
+// --- Array Helpers ---
+
+function modArrayToNative<T>(array: mod.Array): T[] {
+    const result: T[] = [];
+    const count = mod.CountOf(array);
+    for (let i = 0; i < count; i++) {
+        result.push(mod.ValueInArray(array, i) as T);
+    }
+    return result;
+}
+
+function filterModArray(array: mod.Array, predicate: (value: any) => boolean): mod.Array {
+    let result = mod.EmptyArray();
+    const count = mod.CountOf(array);
+    for (let i = 0; i < count; i++) {
+        const value = mod.ValueInArray(array, i);
+        if (predicate(value)) result = mod.AppendToArray(result, value);
+    }
+    return result;
+}
+
+function isTrueForAll(array: mod.Array, predicate: (value: any) => boolean): boolean {
+    const count = mod.CountOf(array);
+    for (let i = 0; i < count; i++) {
+        if (!predicate(mod.ValueInArray(array, i))) return false;
+    }
+    return true;
+}
+
+function isTrueForAny(array: mod.Array, predicate: (value: any) => boolean): boolean {
+    const count = mod.CountOf(array);
+    for (let i = 0; i < count; i++) {
+        if (predicate(mod.ValueInArray(array, i))) return true;
+    }
+    return false;
+}
+
+// ============================================================
+// END MODLIB REPLACEMENT HELPERS
+// ============================================================
+// ============================================================
+
 function initGameSettings() {
     mod.SetVariable(GameOngoingGlobalVar, false)
     mod.SetVariable(EnableCustomAIGlobalVar, true)
@@ -559,13 +654,13 @@ function shouldTrackScore(): boolean {
 
 function trackScoreAndBleed() {
     if (mod.GetVariable(TotalControlTicketBleedGlobalVar)) {
-        if (modlib.IsTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
+        if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
             mod.GetCurrentOwnerTeam(currentArrayElement),
             mod.GetTeam(1)))) {
             mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), mod.Subtract(
                 mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
                 mod.GetVariable(TotalControlBonusGlobalVar)))
-        } else if (modlib.IsTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
+        } else if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
             mod.GetCurrentOwnerTeam(currentArrayElement),
             mod.GetTeam(2)))) {
             mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar), mod.Subtract(
@@ -576,12 +671,12 @@ function trackScoreAndBleed() {
     }
     if (mod.GetVariable(LoserOnlyTicketBleedGlobalVar)) {
         if (mod.GreaterThan(
-            mod.CountOf(modlib.FilteredArray(
+            mod.CountOf(filterModArray(
                 mod.AllCapturePoints(),
                 (currentArrayElement: any) => mod.Equals(
                     mod.GetCurrentOwnerTeam(currentArrayElement),
                     mod.GetTeam(2)))),
-            mod.CountOf(modlib.FilteredArray(
+            mod.CountOf(filterModArray(
                 mod.AllCapturePoints(),
                 (currentArrayElement: any) => mod.Equals(
                     mod.GetCurrentOwnerTeam(currentArrayElement),
@@ -589,12 +684,12 @@ function trackScoreAndBleed() {
             mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar), mod.Subtract(
                 mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
                 mod.Subtract(
-                    mod.CountOf(modlib.FilteredArray(
+                    mod.CountOf(filterModArray(
                         mod.AllCapturePoints(),
                         (currentArrayElement: any) => mod.Equals(
                             mod.GetCurrentOwnerTeam(currentArrayElement),
                             mod.GetTeam(2)))),
-                    mod.CountOf(modlib.FilteredArray(
+                    mod.CountOf(filterModArray(
                         mod.AllCapturePoints(),
                         (currentArrayElement: any) => mod.Equals(
                             mod.GetCurrentOwnerTeam(currentArrayElement),
@@ -603,12 +698,12 @@ function trackScoreAndBleed() {
             animateUIFlash("LeftFlash1", "RightFlash2")
         }
         if (mod.GreaterThan(
-            mod.CountOf(modlib.FilteredArray(
+            mod.CountOf(filterModArray(
                 mod.AllCapturePoints(),
                 (currentArrayElement: any) => mod.Equals(
                     mod.GetCurrentOwnerTeam(currentArrayElement),
                     mod.GetTeam(1)))),
-            mod.CountOf(modlib.FilteredArray(
+            mod.CountOf(filterModArray(
                 mod.AllCapturePoints(),
                 (currentArrayElement: any) => mod.Equals(
                     mod.GetCurrentOwnerTeam(currentArrayElement),
@@ -616,12 +711,12 @@ function trackScoreAndBleed() {
             mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), mod.Subtract(
                 mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
                 mod.Subtract(
-                    mod.CountOf(modlib.FilteredArray(
+                    mod.CountOf(filterModArray(
                         mod.AllCapturePoints(),
                         (currentArrayElement: any) => mod.Equals(
                             mod.GetCurrentOwnerTeam(currentArrayElement),
                             mod.GetTeam(1)))),
-                    mod.CountOf(modlib.FilteredArray(
+                    mod.CountOf(filterModArray(
                         mod.AllCapturePoints(),
                         (currentArrayElement: any) => mod.Equals(
                             mod.GetCurrentOwnerTeam(currentArrayElement),
@@ -632,14 +727,14 @@ function trackScoreAndBleed() {
     } else {
         mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar), mod.Subtract(
             mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
-            mod.CountOf(modlib.FilteredArray(
+            mod.CountOf(filterModArray(
                 mod.AllCapturePoints(),
                 (currentArrayElement: any) => mod.Equals(
                     mod.GetCurrentOwnerTeam(currentArrayElement),
                     mod.GetTeam(2))))))
         mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), mod.Subtract(
             mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
-            mod.CountOf(modlib.FilteredArray(
+            mod.CountOf(filterModArray(
                 mod.AllCapturePoints(),
                 (currentArrayElement: any) => mod.Equals(
                     mod.GetCurrentOwnerTeam(currentArrayElement),
@@ -831,7 +926,7 @@ async function handleCapturePointCaptured(eventInfo: any) {
     updateScoreboard()
     updateFlagIcons()
     mod.SetVariable(PlayersOnObjectiveGlobalVar, mod.EmptyArray())
-    mod.SetVariable(PlayersOnObjectiveGlobalVar, modlib.FilteredArray(
+    mod.SetVariable(PlayersOnObjectiveGlobalVar, filterModArray(
         mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
         (currentArrayElement: any) => mod.Equals(
             mod.GetTeam(currentArrayElement),
@@ -862,9 +957,9 @@ function handleCapturePointCapturedRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldNotifyCapture(eventInfo: any): boolean {
-    const newState = modlib.And(mod.GetVariable(EnableVOGlobalVar), mod.Equals(
+    const newState = mod.GetVariable(EnableVOGlobalVar) && mod.Equals(
         mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-        mod.GetTeam(0)), mod.LessThan(mod.GetCaptureProgress(eventInfo.eventCapturePoint), 0.05))
+        mod.GetTeam(0)) && mod.LessThan(mod.GetCaptureProgress(eventInfo.eventCapturePoint), 0.05);
     return newState;
 }
 
@@ -996,17 +1091,17 @@ async function showCaptureUI(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar), eventInfo.eventCapturePoint)
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar), mod.GetCaptureProgress(eventInfo.eventCapturePoint))
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, FlagOwnerPlayerVar), mod.GetTeam(3))
-    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), modlib.FilteredArray(
+    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), filterModArray(
         mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(modlib.FilteredArray(
+    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
         mod.ValueInArray(mod.GetVariable(tempGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)),
         (currentArrayElement: any) => mod.And(
             mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive),
             mod.Equals(
                 mod.GetTeam(currentArrayElement),
                 mod.GetTeam(eventInfo.eventPlayer))))))
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(modlib.FilteredArray(
+    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
         mod.ValueInArray(mod.GetVariable(tempGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)),
         (currentArrayElement: any) => mod.And(
             mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive),
@@ -1050,10 +1145,10 @@ function shouldHideCaptureUI(eventInfo: any): boolean {
 }
 
 function hideCaptureUI(eventInfo: any) {
-    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), modlib.FilteredArray(
+    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), filterModArray(
         mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(modlib.FilteredArray(
+    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
         mod.ValueInArray(mod.GetVariable(tempGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)),
         (currentArrayElement: any) => mod.And(
             mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive),
@@ -1076,10 +1171,10 @@ function shouldUpdatePlayerCountOnDeath(eventInfo: any): boolean {
 }
 
 function updatePlayerCountOnDeath(eventInfo: any) {
-    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), modlib.FilteredArray(
+    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), filterModArray(
         mod.GetPlayersOnPoint(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), mod.CountOf(modlib.FilteredArray(
+    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), mod.CountOf(filterModArray(
         mod.ValueInArray(mod.GetVariable(tempGlobalVar), mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar)))),
         (currentArrayElement: any) => mod.And(
             mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive),
@@ -1101,10 +1196,10 @@ function shouldUpdatePlayerCountOnRevive(eventInfo: any): boolean {
 }
 
 function updatePlayerCountOnRevive(eventInfo: any) {
-    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), modlib.FilteredArray(
+    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), filterModArray(
         mod.GetPlayersOnPoint(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), mod.CountOf(modlib.FilteredArray(
+    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), mod.CountOf(filterModArray(
         mod.ValueInArray(mod.GetVariable(tempGlobalVar), mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar)))),
         (currentArrayElement: any) => mod.And(
             mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive),
@@ -1264,7 +1359,7 @@ function exitAreaTriggerRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldPlayVOLowTime(): boolean {
-    const newState = modlib.And(mod.GetVariable(GameOngoingGlobalVar), mod.GetVariable(EnableVOGlobalVar), mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 300));
+    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 300);
     return newState;
 }
 
@@ -1281,9 +1376,9 @@ function playVOLowTimeRule(conditionState: any) {
 }
 
 function shouldPlayVOWinning(): boolean {
-    const newState = modlib.And(mod.GetVariable(GameOngoingGlobalVar), mod.GetVariable(EnableVOGlobalVar), mod.GreaterThan(
+    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.GreaterThan(
         mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar))))
+        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)));
     return newState;
 }
 
@@ -1300,9 +1395,9 @@ function playVOWinningRule(conditionState: any) {
 }
 
 function shouldPlayVOTeam2Winning(): boolean {
-    const newState = modlib.And(mod.GetVariable(GameOngoingGlobalVar), mod.GetVariable(EnableVOGlobalVar), mod.GreaterThan(
+    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.GreaterThan(
         mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar))))
+        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)));
     return newState;
 }
 
@@ -1319,7 +1414,7 @@ function playVOTeam2WinningRule(conditionState: any) {
 }
 
 function shouldPlayVOLowTickets(): boolean {
-    const newState = modlib.And(mod.GetVariable(GameOngoingGlobalVar), mod.GetVariable(EnableVOGlobalVar), mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)), mod.GetVariable(LowTicketMusicGlobalVar)));
+    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)), mod.GetVariable(LowTicketMusicGlobalVar));
     return newState;
 }
 
@@ -1336,7 +1431,7 @@ function playVOLowTicketsRule(conditionState: any) {
 }
 
 function shouldPlayVOTeam2LowTickets(): boolean {
-    const newState = modlib.And(mod.GetVariable(GameOngoingGlobalVar), mod.GetVariable(EnableVOGlobalVar), mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)), mod.GetVariable(LowTicketMusicGlobalVar)));
+    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)), mod.GetVariable(LowTicketMusicGlobalVar));
     return newState;
 }
 
@@ -1455,7 +1550,7 @@ function aiScoutOnDeployRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAIFindNewObjective(eventInfo: any): boolean {
-    const newState = modlib.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier), mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)));
+    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
     return newState;
 }
 
@@ -1484,7 +1579,7 @@ function aiFindNewObjectiveRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAIReadyForAttack(eventInfo: any): boolean {
-    const newState = modlib.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier), mod.LessThanEqualTo(mod.GetVariable(MaxCustomAIGlobalVar), 70));
+    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && mod.LessThanEqualTo(mod.GetVariable(MaxCustomAIGlobalVar), 70);
     return newState;
 }
 
@@ -1520,7 +1615,7 @@ function aiReadyForAttackRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAITargetDamager(eventInfo: any): boolean {
-    const newState = modlib.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier), mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar))), mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)), mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)));
+    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar)) && mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
     return newState;
 }
 
@@ -1606,7 +1701,7 @@ function aiRetryMoveRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAITargetOnKill(eventInfo: any): boolean {
-    const newState = modlib.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier), mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)));
+    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
     return newState;
 }
 
@@ -1623,7 +1718,7 @@ function aiTargetOnKillRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAITargetOnKillAssist(eventInfo: any): boolean {
-    const newState = modlib.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier), mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)), mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)));
+    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
     return newState;
 }
 
@@ -2185,12 +2280,12 @@ function addAI() {
             mod.CountOf(mod.AllPlayers()),
             mod.GetVariable(MaxCustomAIGlobalVar))) {
             if (mod.GreaterThan(
-                mod.CountOf(modlib.FilteredArray(
+                mod.CountOf(filterModArray(
                     mod.AllPlayers(),
                     (currentArrayElement: any) => mod.Equals(
                         mod.GetTeam(currentArrayElement),
                         mod.GetTeam(1)))),
-                mod.CountOf(modlib.FilteredArray(
+                mod.CountOf(filterModArray(
                     mod.AllPlayers(),
                     (currentArrayElement: any) => mod.Equals(
                         mod.GetTeam(currentArrayElement),
@@ -2290,7 +2385,7 @@ function spawnAIObjectives(eventInfo: any) {
 
     if (mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle))) {
         mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar), mod.EmptyArray())
-        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar), modlib.FilteredArray(
+        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar), filterModArray(
             mod.AllCapturePoints(),
             (currentArrayElement: any) => mod.And(
                 mod.Equals(
@@ -2310,7 +2405,7 @@ function spawnAIObjectives(eventInfo: any) {
                     mod.GetTeam(2),
                     mod.GetTeam(eventInfo.eventPlayer)))) {
                 mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.RandomValueInArray(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar)))), 1)
-                deployAIVehicle(mod.RandomValueInArray(modlib.FilteredArray(
+                deployAIVehicle(mod.RandomValueInArray(filterModArray(
                     mod.AllVehicles(),
                     (currentArrayElement: any) => mod.LessThan(
                         mod.CountOf(mod.GetAllPlayersInVehicle(currentArrayElement)),
@@ -2320,7 +2415,7 @@ function spawnAIObjectives(eventInfo: any) {
                 mod.RoundToInteger(mod.RandomReal(0, 5)),
                 5)) {
                 mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.RandomValueInArray(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar)))), 1)
-                deployAIVehicle(mod.RandomValueInArray(modlib.FilteredArray(
+                deployAIVehicle(mod.RandomValueInArray(filterModArray(
                     mod.AllVehicles(),
                     (currentArrayElement: any) => mod.LessThan(
                         mod.CountOf(mod.GetAllPlayersInVehicle(currentArrayElement)),
@@ -2375,7 +2470,7 @@ async function animateUIFlash(Team1UI: string, Team2UI: string) {
 }
 async function handleOutOfBounds(eventInfo: any) {
 
-    const newState = modlib.And(mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, IgnoreOOBPlayerVar))), mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar))), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive));
+    const newState = !mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, IgnoreOOBPlayerVar)) && !mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar)) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive);
     return newState;
 
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar), true)
@@ -2436,22 +2531,22 @@ function deployAIVehicle(Vehicle: any, Distance: number, eventInfo: any) {
 }
 function startAIScouting(Player: any) {
 
-    const newState = modlib.And(mod.IsPlayerValid(Player), mod.GetSoldierState(Player, mod.SoldierStateBool.IsAlive), mod.Not(mod.GetSoldierState(Player, mod.SoldierStateBool.IsInVehicle)));
+    const newState = mod.IsPlayerValid(Player) && mod.GetSoldierState(Player, mod.SoldierStateBool.IsAlive) && !mod.GetSoldierState(Player, mod.SoldierStateBool.IsInVehicle);
     return newState;
 
     if (mod.Equals(
-        mod.CountOf(modlib.FilteredArray(
+        mod.CountOf(filterModArray(
             mod.AllCapturePoints(),
             (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(Player), mod.GetCurrentOwnerTeam(currentArrayElement)))),
         0)) {
-        mod.SetVariable(mod.ObjectVariable(Player, AI_TargetPlayerVar), mod.RandomValueInArray(modlib.FilteredArray(
+        mod.SetVariable(mod.ObjectVariable(Player, AI_TargetPlayerVar), mod.RandomValueInArray(filterModArray(
             mod.AllCapturePoints(),
             (currentArrayElement: any) => mod.Equals(
                 mod.GetTeam(Player),
                 mod.GetCurrentOwnerTeam(currentArrayElement)))))
         mod.AIDefendPositionBehavior(Player, mod.GetObjectPosition(mod.GetVariable(mod.ObjectVariable(Player, AI_TargetPlayerVar))), 0, 30)
     } else {
-        mod.SetVariable(mod.ObjectVariable(Player, AI_TargetPlayerVar), mod.RandomValueInArray(modlib.FilteredArray(
+        mod.SetVariable(mod.ObjectVariable(Player, AI_TargetPlayerVar), mod.RandomValueInArray(filterModArray(
             mod.AllCapturePoints(),
             (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(Player), mod.GetCurrentOwnerTeam(currentArrayElement)))))
         mod.AIMoveToBehavior(Player, mod.GetObjectPosition(mod.GetVariable(mod.ObjectVariable(Player, AI_TargetPlayerVar))))
@@ -2593,17 +2688,17 @@ function setupPlayerUI(eventInfo: any) {
 
 
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar), mod.ValueInArray(mod.GetVariable(ID_PoolGlobalVar), 0))
-    if (modlib.IsTrueForAny(
+    if (isTrueForAny(
         mod.GetVariable(UniqueUI_ID_UsedGlobalVar),
         (currentArrayElement: any) => mod.Equals(
             currentArrayElement,
             mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))))) {
         mod.DeleteUIWidget(mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))))
-        mod.SetVariable(UniqueUI_ID_UsedGlobalVar, modlib.FilteredArray(
+        mod.SetVariable(UniqueUI_ID_UsedGlobalVar, filterModArray(
             mod.GetVariable(UniqueUI_ID_UsedGlobalVar),
             (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))))
     }
-    mod.SetVariable(ID_PoolGlobalVar, modlib.FilteredArray(
+    mod.SetVariable(ID_PoolGlobalVar, filterModArray(
         mod.GetVariable(ID_PoolGlobalVar),
         (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))))
     mod.SetVariable(UniqueUI_ID_UsedGlobalVar, mod.AppendToArray(mod.GetVariable(UniqueUI_ID_UsedGlobalVar), mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))))
@@ -2614,7 +2709,7 @@ function setupPlayerUI(eventInfo: any) {
         initPlayerUIIds()
         for (let iterator4Var = 0; iterator4Var < mod.CountOf(mod.AllPlayers()); iterator4Var += 1) {
             mod.SetVariable(iterator4GlobalVar, iterator4Var);
-            mod.SetVariable(ID_PoolGlobalVar, modlib.FilteredArray(
+            mod.SetVariable(ID_PoolGlobalVar, filterModArray(
                 mod.GetVariable(ID_PoolGlobalVar),
                 (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, mod.GetVariable(mod.ObjectVariable(mod.ValueInArray(mod.AllPlayers(), mod.GetVariable(iterator4GlobalVar)), UniqueIDPlayerVar)))))
         }
@@ -2760,7 +2855,7 @@ async function deployAI(eventInfo: any) {
     if (mod.Equals(
         mod.RoundToInteger(mod.RandomReal(0, 1)),
         0)) {
-        deployAIVehicle(mod.RandomValueInArray(modlib.FilteredArray(
+        deployAIVehicle(mod.RandomValueInArray(filterModArray(
             mod.AllVehicles(),
             (currentArrayElement: any) => mod.And(
                 mod.LessThan(
@@ -2777,19 +2872,19 @@ async function deployAI(eventInfo: any) {
 }
 function checkConquestAssaultWin() {
 
-    const newState = modlib.And(mod.GetVariable(ConquestAssaultGlobalVar), mod.GreaterThan(
+    const newState = mod.GetVariable(ConquestAssaultGlobalVar) && mod.GreaterThan(
         mod.GetMatchTimeElapsed(),
-        10), mod.Equals(
-            mod.CountOf(modlib.FilteredArray(
+        10) && mod.Equals(
+            mod.CountOf(filterModArray(
                 mod.AllCapturePoints(),
                 (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(2), mod.GetCurrentOwnerTeam(currentArrayElement)))),
-            0), mod.Equals(
-                mod.CountOf(modlib.FilteredArray(
+            0) && mod.Equals(
+                mod.CountOf(filterModArray(
                     mod.AllPlayers(),
                     (currentArrayElement: any) => mod.NotEqualTo(mod.Equals(
                         mod.GetTeam(2),
                         mod.GetTeam(currentArrayElement)), mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive)))),
-                0))
+                0);
     return newState;
 
     mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), 0)
@@ -2902,162 +2997,162 @@ export function OngoingGlobal() {
     ensureStateInitialized();
     const eventInfo = {};
     let eventNum = 0;
-    initGameSettingsRule(modlib.getGlobalCondition(eventNum++));
-    updateScoreTimeRule(modlib.getGlobalCondition(eventNum++));
-    updateScoreTimeSecondaryTickRule(modlib.getGlobalCondition(eventNum++));
-    trackScoreRule(modlib.getGlobalCondition(eventNum++));
-    playNearEndMusicRule(modlib.getGlobalCondition(eventNum++));
-    endGameRule(modlib.getGlobalCondition(eventNum++));
-    playVOLowTimeRule(modlib.getGlobalCondition(eventNum++));
-    playVOWinningRule(modlib.getGlobalCondition(eventNum++));
-    playVOTeam2WinningRule(modlib.getGlobalCondition(eventNum++));
-    playVOLowTicketsRule(modlib.getGlobalCondition(eventNum++));
-    playVOTeam2LowTicketsRule(modlib.getGlobalCondition(eventNum++));
+    initGameSettingsRule(getGlobalCondition(eventNum++));
+    updateScoreTimeRule(getGlobalCondition(eventNum++));
+    updateScoreTimeSecondaryTickRule(getGlobalCondition(eventNum++));
+    trackScoreRule(getGlobalCondition(eventNum++));
+    playNearEndMusicRule(getGlobalCondition(eventNum++));
+    endGameRule(getGlobalCondition(eventNum++));
+    playVOLowTimeRule(getGlobalCondition(eventNum++));
+    playVOWinningRule(getGlobalCondition(eventNum++));
+    playVOTeam2WinningRule(getGlobalCondition(eventNum++));
+    playVOLowTicketsRule(getGlobalCondition(eventNum++));
+    playVOTeam2LowTicketsRule(getGlobalCondition(eventNum++));
 }
 
 export function OnGameModeStarted() {
     ensureStateInitialized();
     const eventInfo = {};
     let eventNum = 11;
-    setupMapRule(modlib.getGlobalCondition(eventNum++));
+    setupMapRule(getGlobalCondition(eventNum++));
 }
 
 export function OnPlayerEarnedKill(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDeathType: mod.DeathType, eventWeaponUnlock: mod.WeaponUnlock) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDeathType, eventWeaponUnlock };
     let eventNum = 0;
-    processKillRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    aiTargetOnKillRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    processKillRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiTargetOnKillRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerEarnedKillAssist(eventPlayer: mod.Player, eventOtherPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer };
     let eventNum = 2;
-    processAssistRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    aiTargetOnKillAssistRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    processAssistRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiTargetOnKillAssistRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnRevived(eventPlayer: mod.Player, eventOtherPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer };
     let eventNum = 4;
-    processReviveRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    updatePlayerCountOnReviveRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    processReviveRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    updatePlayerCountOnReviveRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerDied(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDeathType: mod.DeathType, eventWeaponUnlock: mod.WeaponUnlock) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDeathType, eventWeaponUnlock };
     let eventNum = 6;
-    handlePlayerDeathRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    updatePlayerCountOnDeathRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    handlePlayerDeathRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    updatePlayerCountOnDeathRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerDeployed(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 8;
-    addEquipmentRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    aiScoutOnDeployRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    aiReadyForAttackRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    addEquipmentRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiScoutOnDeployRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiReadyForAttackRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerJoinGame(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 11;
-    handlePlayerJoinRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    handlePlayerJoinRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerUndeploy(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 12;
-    updateDeathOnUndeployRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    updateDeathOnUndeployRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnCapturePointCaptured(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint };
     let eventNum = 0;
-    handleCapturePointCapturedRule(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
+    handleCapturePointCapturedRule(getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
 }
 
 export function OnCapturePointCapturing(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint };
     let eventNum = 1;
-    notifyCaptureRule(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
+    notifyCaptureRule(getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
 }
 
 export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventCapturePoint };
     let eventNum = 13;
-    showCaptureUIRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    aiFindNewObjectiveRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    showCaptureUIRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiFindNewObjectiveRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerExitCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventCapturePoint };
     let eventNum = 15;
-    hideCaptureUIRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    hideCaptureUIRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerInteract(eventPlayer: mod.Player, eventInteractPoint: mod.InteractPoint) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventInteractPoint };
     let eventNum = 16;
-    handleTeamSwitchAndRepelRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    handleTeamSwitchAndRepelRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerEnterAreaTrigger(eventPlayer: mod.Player, eventAreaTrigger: mod.AreaTrigger) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventAreaTrigger };
     let eventNum = 17;
-    enterAreaTriggerRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    enterAreaTriggerRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerExitAreaTrigger(eventPlayer: mod.Player, eventAreaTrigger: mod.AreaTrigger) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventAreaTrigger };
     let eventNum = 18;
-    exitAreaTriggerRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    exitAreaTriggerRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OngoingCapturePoint(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint: eventCapturePoint };
     let eventNum = 2;
-    runCaptureProgressRule(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
+    runCaptureProgressRule(getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
 }
 
 export function OnPlayerDamaged(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDamageType: mod.DamageType, eventWeaponUnlock: mod.WeaponUnlock) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDamageType, eventWeaponUnlock };
     let eventNum = 19;
-    aiTargetDamagerRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiTargetDamagerRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerExitVehicle(eventPlayer: mod.Player, eventVehicle: mod.Vehicle) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventVehicle };
     let eventNum = 20;
-    aiExitVehicleRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiExitVehicleRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerEnterVehicle(eventPlayer: mod.Player, eventVehicle: mod.Vehicle) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventVehicle };
     let eventNum = 21;
-    aiEnterVehicleRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiEnterVehicleRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnAIMoveToFailed(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 22;
-    aiRetryMoveRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiRetryMoveRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
