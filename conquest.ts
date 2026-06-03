@@ -480,7 +480,6 @@ function initGameSettings() {
     mod.SetVariable(resetFXingGlobalVar, false)
     mod.SetVariable(CapturePointProgressGlobalVar, mod.EmptyArray())
     mod.SetVariable(UniqueUI_ID_UsedGlobalVar, mod.EmptyArray())
-    mod.SetVariable(tempGlobalVar, mod.EmptyArray())
     mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), PlayersOnPointTeamVar), mod.EmptyArray())
     mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), PlayersOnPointTeamVar), mod.EmptyArray())
     mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), Cap_TextColourTeamVar), mod.EmptyArray())
@@ -543,9 +542,8 @@ async function setupMap() {
     } else {
         mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName("container2"), mod.UIBgFill.None)
     }
-    for (let iteratorVar = 0; iteratorVar < mod.CountOf(mod.AllCapturePoints()); iteratorVar += 1) {
-        mod.SetVariable(iteratorGlobalVar, iteratorVar);
-        setupCapturePoint(mod.ValueInArray(mod.AllCapturePoints(), mod.GetVariable(iteratorGlobalVar)))
+    for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
+        setupCapturePoint(mod.ValueInArray(mod.AllCapturePoints(), i))
     }
     mod.SetUnspawnDelayInSeconds(mod.GetSpawner(901), 300)
     mod.SetUnspawnDelayInSeconds(mod.GetSpawner(902), 300)
@@ -567,23 +565,17 @@ async function setupMap() {
     if (mod.GetVariable(ConquestAssaultGlobalVar)) {
         mod.EnableHQ(mod.GetHQ(2), false)
     }
-    for (let iterator4Var = 2000; iterator4Var < 2999; iterator4Var += 1) {
-        mod.SetVariable(iterator4GlobalVar, iterator4Var);
-        mod.EnableVFX(mod.GetVFX(mod.GetVariable(iterator4GlobalVar)), true)
+    for (let i = 2000; i < 2999; i++) {
+        mod.EnableVFX(mod.GetVFX(i), true)
     }
+    mod.SetVariable(GameOngoingGlobalVar, true)
     while (mod.GetVariable(GameOngoingGlobalVar)) {
-        for (let iterator3Var = 10; iterator3Var < 0; iterator3Var += -2) {
-            mod.SetVariable(iterator3GlobalVar, iterator3Var);
-            mod.SetVariable(CapturepointFlashGlobalVar, mod.Divide(
-                mod.GetVariable(iterator3GlobalVar),
-                10))
+        for (let i = 10; i < 0; i += -2) {
+            mod.SetVariable(CapturepointFlashGlobalVar, i / 10)
             await mod.Wait(0.1)
         }
-        for (let iterator3Var = 0; iterator3Var < 10; iterator3Var += 2) {
-            mod.SetVariable(iterator3GlobalVar, iterator3Var);
-            mod.SetVariable(CapturepointFlashGlobalVar, mod.Divide(
-                mod.GetVariable(iterator3GlobalVar),
-                10))
+        for (let i = 0; i < 10; i += 2) {
+            mod.SetVariable(CapturepointFlashGlobalVar, i / 10)
             await mod.Wait(0.1)
         }
     }
@@ -931,11 +923,10 @@ async function handleCapturePointCaptured(eventInfo: any) {
         (currentArrayElement: any) => mod.Equals(
             mod.GetTeam(currentArrayElement),
             mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))))
-    for (let iteratorVar = 0; iteratorVar < mod.CountOf(mod.GetVariable(PlayersOnObjectiveGlobalVar)); iteratorVar += 1) {
-        mod.SetVariable(iteratorGlobalVar, iteratorVar);
-        processObjectivePlayerData(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), mod.GetVariable(iteratorGlobalVar)))
-        if (mod.GetSoldierState(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), mod.GetVariable(iteratorGlobalVar)), mod.SoldierStateBool.IsAISoldier)) {
-            startAIScouting(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), mod.GetVariable(iteratorGlobalVar)))
+    for (let i = 0; i < mod.CountOf(mod.GetVariable(PlayersOnObjectiveGlobalVar)); i++) {
+        processObjectivePlayerData(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), i))
+        if (mod.GetSoldierState(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), i), mod.SoldierStateBool.IsAISoldier)) {
+            startAIScouting(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), i))
         }
     }
     spawnObjectiveVehicles(eventInfo)
@@ -1053,9 +1044,8 @@ async function endGame() {
     mod.DeleteUIWidget(mod.FindUIWidgetWithName("Team2RightBar"))
     mod.DeleteUIWidget(mod.FindUIWidgetWithName("LeftBarBG"))
     mod.DeleteUIWidget(mod.FindUIWidgetWithName("RightBarBG"))
-    for (let iteratorVar = 0; iteratorVar < mod.CountOf(mod.GetVariable(ObjectiveTrackingUIGlobalVar)); iteratorVar += 1) {
-        mod.SetVariable(iteratorGlobalVar, iteratorVar);
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.GetVariable(iteratorGlobalVar))))
+    for (let i = 0; i < mod.CountOf(mod.GetVariable(ObjectiveTrackingUIGlobalVar)); i++) {
+        mod.DeleteUIWidget(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)))
     }
     showEndGameUI("Team1ScoreLeft", mod.GetVariable(ScorePositionLeftGlobalVar))
     showEndGameUI("Team1ScoreRight", mod.GetVariable(ScorePositionRightGlobalVar))
@@ -1091,23 +1081,21 @@ async function showCaptureUI(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar), eventInfo.eventCapturePoint)
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar), mod.GetCaptureProgress(eventInfo.eventCapturePoint))
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, FlagOwnerPlayerVar), mod.GetTeam(3))
-    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), filterModArray(
+    const validPlayersOnPoint = filterModArray(
         mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
-        (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
+        (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
     mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
-        mod.ValueInArray(mod.GetVariable(tempGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)),
-        (currentArrayElement: any) => mod.And(
-            mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive),
+        validPlayersOnPoint,
+        (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
             mod.Equals(
                 mod.GetTeam(currentArrayElement),
-                mod.GetTeam(eventInfo.eventPlayer))))))
+                mod.GetTeam(eventInfo.eventPlayer)))))
     mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
-        mod.ValueInArray(mod.GetVariable(tempGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)),
-        (currentArrayElement: any) => mod.And(
-            mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive),
+        validPlayersOnPoint,
+        (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
             mod.Equals(
                 mod.GetTeam(currentArrayElement),
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)))))))
+                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar))))))
     await mod.Wait(0.05)
     manageCapturePointUI(eventInfo.eventCapturePoint, mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar)), eventInfo)
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar), true)
@@ -1145,16 +1133,15 @@ function shouldHideCaptureUI(eventInfo: any): boolean {
 }
 
 function hideCaptureUI(eventInfo: any) {
-    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), filterModArray(
+    const validPlayersOnPoint = filterModArray(
         mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
-        (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
+        (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
     mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
-        mod.ValueInArray(mod.GetVariable(tempGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)),
-        (currentArrayElement: any) => mod.And(
-            mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive),
+        validPlayersOnPoint,
+        (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
             mod.Equals(
                 mod.GetTeam(currentArrayElement),
-                mod.GetTeam(eventInfo.eventPlayer))))))
+                mod.GetTeam(eventInfo.eventPlayer)))))
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar), false)
 }
 function hideCaptureUIRule(conditionState: any, eventInfo: any) {
@@ -1171,16 +1158,16 @@ function shouldUpdatePlayerCountOnDeath(eventInfo: any): boolean {
 }
 
 function updatePlayerCountOnDeath(eventInfo: any) {
-    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), filterModArray(
+    const cpId = mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar)));
+    const validPlayersOnPoint = filterModArray(
         mod.GetPlayersOnPoint(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))),
-        (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), mod.CountOf(filterModArray(
-        mod.ValueInArray(mod.GetVariable(tempGlobalVar), mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar)))),
-        (currentArrayElement: any) => mod.And(
-            mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive),
+        (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
+    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), cpId, mod.CountOf(filterModArray(
+        validPlayersOnPoint,
+        (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
             mod.Equals(
                 mod.GetTeam(currentArrayElement),
-                mod.GetTeam(eventInfo.eventPlayer))))))
+                mod.GetTeam(eventInfo.eventPlayer)))))
 }
 function updatePlayerCountOnDeathRule(conditionState: any, eventInfo: any) {
     let newState = shouldUpdatePlayerCountOnDeath(eventInfo);
@@ -1196,16 +1183,16 @@ function shouldUpdatePlayerCountOnRevive(eventInfo: any): boolean {
 }
 
 function updatePlayerCountOnRevive(eventInfo: any) {
-    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), filterModArray(
+    const cpId = mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar)));
+    const validPlayersOnPoint = filterModArray(
         mod.GetPlayersOnPoint(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))),
-        (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), mod.CountOf(filterModArray(
-        mod.ValueInArray(mod.GetVariable(tempGlobalVar), mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar)))),
-        (currentArrayElement: any) => mod.And(
-            mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive),
+        (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
+    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), cpId, mod.CountOf(filterModArray(
+        validPlayersOnPoint,
+        (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
             mod.Equals(
                 mod.GetTeam(currentArrayElement),
-                mod.GetTeam(eventInfo.eventPlayer))))))
+                mod.GetTeam(eventInfo.eventPlayer)))))
 }
 function updatePlayerCountOnReviveRule(conditionState: any, eventInfo: any) {
     let newState = shouldUpdatePlayerCountOnRevive(eventInfo);
@@ -1454,7 +1441,6 @@ async function updateCaptureProgress(eventInfo: any) {
     }
     await mod.Wait(mod.RandomReal(0, 1))
     mod.SetVariableAtIndex(CapturePointProgressGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.GetCaptureProgress(eventInfo.eventCapturePoint))
-    mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.EmptyArray())
     mod.SetVariableAtIndex(CaptureProgressSizeGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.CreateVector(mod.Floor(mod.Multiply(220, mod.GetCaptureProgress(eventInfo.eventCapturePoint))), 7, 0))
     mod.SetVariableAtIndex(CaptureProgressPositionGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.CreateVector(mod.Add(
         -110,
@@ -1903,121 +1889,16 @@ function processObjectivePlayerData(Player: any) {
     updatePlayerScoreboard(Player)
     mod.PlaySound(mod.GetVariable(CapturedSoundGlobalVar), 0.7, Player)
 }
-function AppendToArray(Value: string) {
-
-
-    mod.SetVariable(AppendGlobalVar, mod.AppendToArray(mod.GetVariable(AppendGlobalVar), Value))
-}
 function initPlayerUIIds() {
-
-
-    mod.SetVariable(ID_PoolGlobalVar, mod.EmptyArray())
-    mod.SetVariable(AppendGlobalVar, mod.EmptyArray())
-    AppendToArray("1")
-    AppendToArray("2")
-    AppendToArray("3")
-    AppendToArray("4")
-    AppendToArray("5")
-    AppendToArray("6")
-    AppendToArray("7")
-    AppendToArray("8")
-    AppendToArray("9")
-    AppendToArray("10")
-    AppendToArray("11")
-    AppendToArray("12")
-    AppendToArray("13")
-    AppendToArray("14")
-    AppendToArray("15")
-    AppendToArray("16")
-    AppendToArray("17")
-    AppendToArray("18")
-    AppendToArray("19")
-    AppendToArray("20")
-    AppendToArray("21")
-    AppendToArray("22")
-    AppendToArray("23")
-    AppendToArray("24")
-    AppendToArray("25")
-    AppendToArray("26")
-    AppendToArray("27")
-    AppendToArray("28")
-    AppendToArray("29")
-    AppendToArray("30")
-    AppendToArray("31")
-    AppendToArray("32")
-    AppendToArray("33")
-    AppendToArray("34")
-    AppendToArray("35")
-    AppendToArray("36")
-    AppendToArray("37")
-    AppendToArray("38")
-    AppendToArray("39")
-    AppendToArray("40")
-    AppendToArray("41")
-    AppendToArray("42")
-    AppendToArray("43")
-    AppendToArray("44")
-    AppendToArray("45")
-    AppendToArray("46")
-    AppendToArray("47")
-    AppendToArray("48")
-    AppendToArray("49")
-    AppendToArray("50")
-    AppendToArray("51")
-    AppendToArray("52")
-    AppendToArray("53")
-    AppendToArray("54")
-    AppendToArray("55")
-    AppendToArray("56")
-    AppendToArray("57")
-    AppendToArray("58")
-    AppendToArray("59")
-    AppendToArray("60")
-    AppendToArray("61")
-    AppendToArray("62")
-    AppendToArray("63")
-    AppendToArray("64")
-    AppendToArray("65")
-    AppendToArray("66")
-    AppendToArray("67")
-    AppendToArray("68")
-    AppendToArray("70")
-    AppendToArray("71")
-    AppendToArray("72")
-    AppendToArray("73")
-    AppendToArray("74")
-    AppendToArray("75")
-    AppendToArray("76")
-    AppendToArray("77")
-    AppendToArray("78")
-    AppendToArray("79")
-    AppendToArray("80")
-    AppendToArray("81")
-    AppendToArray("82")
-    AppendToArray("83")
-    AppendToArray("84")
-    AppendToArray("85")
-    AppendToArray("86")
-    AppendToArray("87")
-    AppendToArray("106")
-    AppendToArray("89")
-    AppendToArray("90")
-    AppendToArray("91")
-    AppendToArray("92")
-    AppendToArray("93")
-    AppendToArray("94")
-    AppendToArray("95")
-    AppendToArray("96")
-    AppendToArray("97")
-    AppendToArray("98")
-    AppendToArray("99")
-    AppendToArray("100")
-    AppendToArray("101")
-    AppendToArray("102")
-    AppendToArray("103")
-    AppendToArray("104")
-    AppendToArray("105")
-    mod.SetVariable(ID_PoolGlobalVar, mod.GetVariable(AppendGlobalVar))
+    const ids: string[] = [];
+    for (let i = 1; i <= 105; i++) {
+        ids.push(i.toString());
+    }
+    let pool = mod.EmptyArray();
+    for (const id of ids) {
+        pool = mod.AppendToArray(pool, id);
+    }
+    mod.SetVariable(ID_PoolGlobalVar, pool);
 }
 function updateObjectiveUI(Label: string, eventInfo: any) {
 
@@ -2055,19 +1936,18 @@ function setupMainUI() {
     mod.AddUIText("RightBarBG", mod.CreateVector(160, 60, 0), mod.CreateVector(200, 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
     setupScoreUI("Team1ScoreLeft", "Team1ScoreRight", "Team1LeftBar", "Team1RightBar", mod.GetTeam(1))
     setupScoreUI("Team2ScoreLeft", "Team2ScoreRight", "Team2LeftBar", "Team2RightBar", mod.GetTeam(2))
-    for (let iteratorVar = 0; iteratorVar < mod.CountOf(mod.AllCapturePoints()); iteratorVar += 1) {
-        mod.SetVariable(iteratorGlobalVar, iteratorVar);
-        mod.AddUIText(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.GetVariable(iteratorGlobalVar)), mod.CreateVector(mod.Multiply(mod.Subtract(
-            mod.GetVariable(iteratorGlobalVar),
+    for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
+        mod.AddUIText(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i), mod.CreateVector(mod.Multiply(mod.Subtract(
+            i,
             mod.Divide(
                 mod.Subtract(
                     mod.CountOf(mod.AllCapturePoints()),
                     1),
-                2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(mod.ValueInArray(mod.GetVariable(FlagLettersGlobalVar), mod.GetVariable(iteratorGlobalVar))), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
+                2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(mod.ValueInArray(mod.GetVariable(FlagLettersGlobalVar), i)), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
         mod.AddUIText(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
             52,
-            mod.GetVariable(iteratorGlobalVar))), mod.CreateVector(mod.Multiply(mod.Subtract(
-                mod.GetVariable(iteratorGlobalVar),
+            i)), mod.CreateVector(mod.Multiply(mod.Subtract(
+                i,
                 mod.Divide(
                     mod.Subtract(
                         mod.CountOf(mod.AllCapturePoints()),
@@ -2075,17 +1955,17 @@ function setupMainUI() {
                     2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.OutlineThin, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
         mod.AddUIText(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
             26,
-            mod.GetVariable(iteratorGlobalVar))), mod.CreateVector(mod.Multiply(mod.Subtract(
-                mod.GetVariable(iteratorGlobalVar),
+            i)), mod.CreateVector(mod.Multiply(mod.Subtract(
+                i,
                 mod.Divide(
                     mod.Subtract(
                         mod.CountOf(mod.AllCapturePoints()),
                         1),
-                    2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(mod.ValueInArray(mod.GetVariable(FlagLettersGlobalVar), mod.GetVariable(iteratorGlobalVar))), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
+                    2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(mod.ValueInArray(mod.GetVariable(FlagLettersGlobalVar), i)), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
         mod.AddUIText(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
             78,
-            mod.GetVariable(iteratorGlobalVar))), mod.CreateVector(mod.Multiply(mod.Subtract(
-                mod.GetVariable(iteratorGlobalVar),
+            i)), mod.CreateVector(mod.Multiply(mod.Subtract(
+                i,
                 mod.Divide(
                     mod.Subtract(
                         mod.CountOf(mod.AllCapturePoints()),
@@ -2129,148 +2009,28 @@ function setupScoreUI(LeftScore: string, RightScore: string, LeftBar: string, Ri
                 mod.GetVariable(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(Team, OtherTeamTeamVar)), StartingScoreTeamVar)))), 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
 }
 function initObjectiveLetters() {
-
-
-    mod.SetVariable(FlagLettersGlobalVar, mod.EmptyArray())
-    mod.SetVariable(AppendGlobalVar, mod.EmptyArray())
-    AppendToArray("A")
-    AppendToArray("B")
-    AppendToArray("C")
-    AppendToArray("D")
-    AppendToArray("E")
-    AppendToArray("F")
-    AppendToArray("G")
-    AppendToArray("H")
-    AppendToArray("I")
-    AppendToArray("J")
-    AppendToArray("K")
-    AppendToArray("L")
-    AppendToArray("M")
-    AppendToArray("N")
-    AppendToArray("O")
-    AppendToArray("P")
-    AppendToArray("Q")
-    AppendToArray("R")
-    AppendToArray("S")
-    AppendToArray("T")
-    AppendToArray("U")
-    AppendToArray("V")
-    AppendToArray("W")
-    AppendToArray("X")
-    AppendToArray("Y")
-    AppendToArray("Z")
-    mod.SetVariable(FlagLettersGlobalVar, mod.GetVariable(AppendGlobalVar))
+    const letters: string[] = [];
+    for (let i = 0; i < 26; i++) {
+        letters.push(String.fromCharCode(65 + i));
+    }
+    let arr = mod.EmptyArray();
+    for (const letter of letters) {
+        arr = mod.AppendToArray(arr, letter);
+    }
+    mod.SetVariable(FlagLettersGlobalVar, arr);
 }
 function initObjectiveTeamUI() {
-
-
-    mod.SetVariable(ObjectiveTrackingUIGlobalVar, mod.EmptyArray())
-    mod.SetVariable(AppendGlobalVar, mod.EmptyArray())
-    AppendToArray("A1")
-    AppendToArray("B1")
-    AppendToArray("C1")
-    AppendToArray("D1")
-    AppendToArray("E1")
-    AppendToArray("F1")
-    AppendToArray("G1")
-    AppendToArray("H1")
-    AppendToArray("I1")
-    AppendToArray("J1")
-    AppendToArray("K1")
-    AppendToArray("L1")
-    AppendToArray("M1")
-    AppendToArray("N1")
-    AppendToArray("O1")
-    AppendToArray("P1")
-    AppendToArray("Q1")
-    AppendToArray("R1")
-    AppendToArray("S1")
-    AppendToArray("T1")
-    AppendToArray("U1")
-    AppendToArray("V1")
-    AppendToArray("W1")
-    AppendToArray("X1")
-    AppendToArray("Y1")
-    AppendToArray("Z1")
-    AppendToArray("A2")
-    AppendToArray("B2")
-    AppendToArray("C2")
-    AppendToArray("D2")
-    AppendToArray("E2")
-    AppendToArray("F2")
-    AppendToArray("G2")
-    AppendToArray("H2")
-    AppendToArray("I2")
-    AppendToArray("J2")
-    AppendToArray("K2")
-    AppendToArray("L2")
-    AppendToArray("M2")
-    AppendToArray("N2")
-    AppendToArray("O2")
-    AppendToArray("P2")
-    AppendToArray("Q2")
-    AppendToArray("R2")
-    AppendToArray("S2")
-    AppendToArray("T2")
-    AppendToArray("U2")
-    AppendToArray("V2")
-    AppendToArray("W2")
-    AppendToArray("X2")
-    AppendToArray("Y2")
-    AppendToArray("Z2")
-    AppendToArray("A3")
-    AppendToArray("B3")
-    AppendToArray("C3")
-    AppendToArray("D3")
-    AppendToArray("E3")
-    AppendToArray("F3")
-    AppendToArray("G3")
-    AppendToArray("H3")
-    AppendToArray("I3")
-    AppendToArray("J3")
-    AppendToArray("K3")
-    AppendToArray("L3")
-    AppendToArray("M3")
-    AppendToArray("N3")
-    AppendToArray("O3")
-    AppendToArray("P3")
-    AppendToArray("Q3")
-    AppendToArray("R3")
-    AppendToArray("S3")
-    AppendToArray("T3")
-    AppendToArray("U3")
-    AppendToArray("V3")
-    AppendToArray("W3")
-    AppendToArray("X3")
-    AppendToArray("Y3")
-    AppendToArray("Z3")
-    AppendToArray("A4")
-    AppendToArray("B4")
-    AppendToArray("C4")
-    AppendToArray("D4")
-    AppendToArray("E4")
-    AppendToArray("F4")
-    AppendToArray("G4")
-    AppendToArray("H4")
-    AppendToArray("I4")
-    AppendToArray("J4")
-    AppendToArray("K4")
-    AppendToArray("L4")
-    AppendToArray("M4")
-    AppendToArray("N4")
-    AppendToArray("O4")
-    AppendToArray("P4")
-    AppendToArray("Q4")
-    AppendToArray("R4")
-    AppendToArray("S4")
-    AppendToArray("T4")
-    AppendToArray("U4")
-    AppendToArray("V4")
-    AppendToArray("W4")
-    AppendToArray("X4")
-    AppendToArray("Y4")
-    AppendToArray("Z4")
-    mod.SetVariable(ObjectiveTrackingUIGlobalVar, mod.GetVariable(AppendGlobalVar))
+    const items: string[] = [];
+    for (let suffix = 1; suffix <= 4; suffix++) {
+        for (let i = 0; i < 26; i++) {
+            items.push(String.fromCharCode(65 + i) + suffix);
+        }
+    }
+    let arr = mod.EmptyArray();
+    for (const item of items) {
+        arr = mod.AppendToArray(arr, item);
+    }
+    mod.SetVariable(ObjectiveTrackingUIGlobalVar, arr);
 }
 function addAI() {
 
@@ -2290,95 +2050,93 @@ function addAI() {
                     (currentArrayElement: any) => mod.Equals(
                         mod.GetTeam(currentArrayElement),
                         mod.GetTeam(2)))))) {
-                mod.SpawnAIFromAISpawner(mod.GetSpawner(902), mod.Message(mod.ValueInArray(mod.GetVariable(BotNamesGlobalVar), mod.GetVariable(nameIndexGlobalVar))), mod.GetTeam(2))
+                mod.SpawnAIFromAISpawner(mod.GetSpawner(902), mod.Message(mod.ValueInArray(mod.GetVariable(BotNamesGlobalVar), botNameIndex)), mod.GetTeam(2))
             } else {
-                mod.SpawnAIFromAISpawner(mod.GetSpawner(901), mod.Message(mod.ValueInArray(mod.GetVariable(BotNamesGlobalVar), mod.GetVariable(nameIndexGlobalVar))), mod.GetTeam(1))
+                mod.SpawnAIFromAISpawner(mod.GetSpawner(901), mod.Message(mod.ValueInArray(mod.GetVariable(BotNamesGlobalVar), botNameIndex)), mod.GetTeam(1))
             }
-            mod.SetVariable(nameIndexGlobalVar, mod.Add(
-                mod.GetVariable(nameIndexGlobalVar),
-                1))
-            if (mod.Equals(
-                mod.GetVariable(nameIndexGlobalVar),
-                mod.CountOf(mod.GetVariable(BotNamesGlobalVar)))) {
-                mod.SetVariable(nameIndexGlobalVar, 0)
+            const botNameCount = mod.CountOf(mod.GetVariable(BotNamesGlobalVar));
+            if (botNameCount > 0) {
+                botNameIndex = (botNameIndex + 1) % botNameCount;
             }
         } else {
         }
     }
 }
 function initBotNames() {
-
-
-    mod.SetVariable(BotNamesGlobalVar, mod.EmptyArray())
-    mod.SetVariable(AppendGlobalVar, mod.EmptyArray())
-    AppendToArray("andy6170 (Bot)")
-    AppendToArray("TheOzzy (Bot)")
-    AppendToArray("Mancour (Bot)")
-    AppendToArray("gala_vs (Bot)")
-    AppendToArray("BattlefieldDad (Bot)")
-    AppendToArray("Matavatar (Bot)")
-    AppendToArray("ToughKarma (Bot)")
-    AppendToArray("extermin8or_ (Bot)")
-    AppendToArray("Draco25240 (Bot)")
-    AppendToArray("CodeName_Deus (Bot)")
-    AppendToArray("TonisGaming (Bot)")
-    AppendToArray("SCKGaming (Bot)")
-    AppendToArray("HybridBeard0 (Bot)")
-    AppendToArray("ClaraTheRed (Bot)")
-    AppendToArray("PrincessTeacup (Bot)")
-    AppendToArray("Haze (Bot)")
-    AppendToArray("Renette (Bot)")
-    AppendToArray("BT Zero (Bot)")
-    AppendToArray("Thirsty Wizard (Bot)")
-    AppendToArray("SwarmFly (Bot)")
-    AppendToArray("Sheer Iceman (Bot)")
-    AppendToArray("Daniel VNZ (Bot)")
-    AppendToArray("Languorian (Bot)")
-    AppendToArray("zbmts (Bot)")
-    AppendToArray("Joshua (Bot)")
-    AppendToArray("Richard (Bot)")
-    AppendToArray("Dirteebreaks (Bot)")
-    AppendToArray("Mystfit (Bot)")
-    AppendToArray("Shorty (Bot)")
-    AppendToArray("tango (Bot)")
-    AppendToArray("Beam (Bot)")
-    AppendToArray("C¥pher (Bot)")
-    AppendToArray("ThirdEyeAgent (Bot)")
-    AppendToArray("floris12fs (Bot)")
-    AppendToArray("oleole56 (Bot)")
-    AppendToArray("LadyArsenic (Bot)")
-    AppendToArray("Akira72 (Bot)")
-    AppendToArray("KieranP (Bot)")
-    AppendToArray("warcreator (Bot)")
-    AppendToArray("Cytochrome2 (Bot)")
-    AppendToArray("LT D.A.L.E. (Bot)")
-    AppendToArray("Kale (Bot)")
-    AppendToArray("OutlawSkot33 (Bot)")
-    AppendToArray("F4rus (Bot)")
-    AppendToArray("TabbedScamper (Bot)")
-    AppendToArray("reni2 (Bot)")
-    AppendToArray("AP_Atipoya (Bot)")
-    AppendToArray("m1kedeluca_ (Bot)")
-    AppendToArray("Ariistuujj (Bot)")
-    AppendToArray("Marcus (DJsparco) (Bot)")
-    AppendToArray("Hope (Bot)")
-    AppendToArray("pompom (Bot)")
-    AppendToArray("mindflexor (Bot)")
-    AppendToArray("Robert5974 (Bot)")
-    AppendToArray("Ricelletis (Bot)")
-    AppendToArray("cczzcx (Bot)")
-    AppendToArray("Fobia_BGa (Bot)")
-    AppendToArray("Nodone (Bot)")
-    AppendToArray("Crush (Bot)")
-    AppendToArray("EIGuimaraes (Bot)")
-    AppendToArray("Bennen (Bot)")
-    AppendToArray("Mary (Bot)")
-    AppendToArray("dzonzla_ (Bot)")
-    AppendToArray("L0gan-M-Sc0tt (Bot)")
-    AppendToArray("FaithWalker (Bot)")
-    AppendToArray("SgtHamster (Bot)")
-    AppendToArray("LoganTheBrawler (Bot)")
-    mod.SetVariable(BotNamesGlobalVar, mod.GetVariable(AppendGlobalVar))
+    const names: string[] = [
+        "andy6170 (Bot)",
+        "TheOzzy (Bot)",
+        "Mancour (Bot)",
+        "gala_vs (Bot)",
+        "BattlefieldDad (Bot)",
+        "Matavatar (Bot)",
+        "ToughKarma (Bot)",
+        "extermin8or_ (Bot)",
+        "Draco25240 (Bot)",
+        "CodeName_Deus (Bot)",
+        "TonisGaming (Bot)",
+        "SCKGaming (Bot)",
+        "HybridBeard0 (Bot)",
+        "ClaraTheRed (Bot)",
+        "PrincessTeacup (Bot)",
+        "Haze (Bot)",
+        "Renette (Bot)",
+        "BT Zero (Bot)",
+        "Thirsty Wizard (Bot)",
+        "SwarmFly (Bot)",
+        "Sheer Iceman (Bot)",
+        "Daniel VNZ (Bot)",
+        "Languorian (Bot)",
+        "zbmts (Bot)",
+        "Joshua (Bot)",
+        "Richard (Bot)",
+        "Dirteebreaks (Bot)",
+        "Mystfit (Bot)",
+        "Shorty (Bot)",
+        "tango (Bot)",
+        "Beam (Bot)",
+        "C¥pher (Bot)",
+        "ThirdEyeAgent (Bot)",
+        "floris12fs (Bot)",
+        "oleole56 (Bot)",
+        "LadyArsenic (Bot)",
+        "Akira72 (Bot)",
+        "KieranP (Bot)",
+        "warcreator (Bot)",
+        "Cytochrome2 (Bot)",
+        "LT D.A.L.E. (Bot)",
+        "Kale (Bot)",
+        "OutlawSkot33 (Bot)",
+        "F4rus (Bot)",
+        "TabbedScamper (Bot)",
+        "reni2 (Bot)",
+        "AP_Atipoya (Bot)",
+        "m1kedeluca_ (Bot)",
+        "Ariistuujj (Bot)",
+        "Marcus (DJsparco) (Bot)",
+        "Hope (Bot)",
+        "pompom (Bot)",
+        "mindflexor (Bot)",
+        "Robert5974 (Bot)",
+        "Ricelletis (Bot)",
+        "cczzcx (Bot)",
+        "Fobia_BGa (Bot)",
+        "Nodone (Bot)",
+        "Crush (Bot)",
+        "EIGuimaraes (Bot)",
+        "Bennen (Bot)",
+        "Mary (Bot)",
+        "dzonzla_ (Bot)",
+        "L0gan-M-Sc0tt (Bot)",
+        "FaithWalker (Bot)",
+        "SgtHamster (Bot)",
+        "LoganTheBrawler (Bot)",
+    ];
+    let arr = mod.EmptyArray();
+    for (const name of names) {
+        arr = mod.AppendToArray(arr, name);
+    }
+    mod.SetVariable(BotNamesGlobalVar, arr);
 }
 function spawnAIObjectives(eventInfo: any) {
 
@@ -2433,35 +2191,33 @@ function spawnAIObjectives(eventInfo: any) {
     }
 }
 function initFlagCalls() {
-
-
-    mod.SetVariable(FlagAnnounceGlobalVar, mod.EmptyArray())
-    mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.Alpha))
-    mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.Bravo))
-    mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.Charlie))
-    mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.Delta))
-    mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.Echo))
-    mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.Foxtrot))
-    mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.Golf))
-    mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.Hotel))
-    mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.India))
+    let arr = mod.EmptyArray();
+    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Alpha);
+    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Bravo);
+    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Charlie);
+    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Delta);
+    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Echo);
+    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Foxtrot);
+    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Golf);
+    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Hotel);
+    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.India);
+    mod.SetVariable(FlagAnnounceGlobalVar, arr);
 }
 async function animateUIFlash(Team1UI: string, Team2UI: string) {
 
 
     mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(Team1UI), 1)
     mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(Team2UI), 1)
-    for (let iterator2Var = 10; iterator2Var < 100; iterator2Var += 10) {
-        mod.SetVariable(iterator2GlobalVar, iterator2Var);
+    for (let i = 10; i < 100; i += 10) {
         mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(Team1UI), mod.Subtract(
             1,
             mod.Divide(
-                mod.GetVariable(iterator2GlobalVar),
+                i,
                 100)))
         mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(Team2UI), mod.Subtract(
             1,
             mod.Divide(
-                mod.GetVariable(iterator2GlobalVar),
+                i,
                 100)))
         await mod.Wait(0.033)
     }
@@ -2564,60 +2320,60 @@ function startAIScouting(Player: any) {
 function updateFlagIcons() {
 
 
-    for (let iteratorVar = 0; iteratorVar < mod.CountOf(mod.AllCapturePoints()); iteratorVar += 1) {
-        mod.SetVariable(iteratorGlobalVar, iteratorVar);
+    for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
+        
         if (mod.Equals(
             mod.GetCurrentOwnerTeam(mod.GetCapturePoint(mod.Add(
                 200,
-                mod.GetVariable(iteratorGlobalVar)))),
+                i))),
             mod.GetTeam(1))) {
-            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.GetVariable(iteratorGlobalVar))), mod.GetVariable(FriendlyTextColourGlobalVar))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.GetVariable(iteratorGlobalVar))), mod.GetVariable(FriendlyBGColourGlobalVar))
+            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.GetVariable(FriendlyTextColourGlobalVar))
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.GetVariable(FriendlyBGColourGlobalVar))
             mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 26))), mod.GetVariable(EnemyTextColourGlobalVar))
             mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 26))), mod.GetVariable(EnemyBGColourGlobalVar))
             mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 52))), mod.GetVariable(FriendlyTextColourGlobalVar))
             mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 78))), mod.GetVariable(EnemyTextColourGlobalVar))
         } else if (mod.Equals(
             mod.GetCurrentOwnerTeam(mod.GetCapturePoint(mod.Add(
                 200,
-                mod.GetVariable(iteratorGlobalVar)))),
+                i))),
             mod.GetTeam(2))) {
-            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.GetVariable(iteratorGlobalVar))), mod.GetVariable(EnemyTextColourGlobalVar))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.GetVariable(iteratorGlobalVar))), mod.GetVariable(EnemyBGColourGlobalVar))
+            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.GetVariable(EnemyTextColourGlobalVar))
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.GetVariable(EnemyBGColourGlobalVar))
             mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 26))), mod.GetVariable(FriendlyTextColourGlobalVar))
             mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 26))), mod.GetVariable(FriendlyBGColourGlobalVar))
             mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 52))), mod.GetVariable(EnemyTextColourGlobalVar))
             mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 78))), mod.GetVariable(FriendlyTextColourGlobalVar))
         } else {
-            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.GetVariable(iteratorGlobalVar))), mod.CreateVector(0.9, 0.9, 0.9))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.GetVariable(iteratorGlobalVar))), mod.CreateVector(0, 0, 0))
+            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.CreateVector(0.9, 0.9, 0.9))
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.CreateVector(0, 0, 0))
             mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 26))), mod.CreateVector(0.9, 0.9, 0.9))
             mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 26))), mod.CreateVector(0, 0, 0))
             mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 52))), mod.CreateVector(0.9, 0.9, 0.9))
             mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
-                mod.GetVariable(iteratorGlobalVar),
+                i,
                 78))), mod.CreateVector(0.9, 0.9, 0.9))
         }
     }
@@ -2707,11 +2463,10 @@ function setupPlayerUI(eventInfo: any) {
     mod.SetUIWidgetDepth(mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), mod.UIDepth.AboveGameUI)
     if (mod.LessThanEqualTo(mod.CountOf(mod.GetVariable(ID_PoolGlobalVar)), 1)) {
         initPlayerUIIds()
-        for (let iterator4Var = 0; iterator4Var < mod.CountOf(mod.AllPlayers()); iterator4Var += 1) {
-            mod.SetVariable(iterator4GlobalVar, iterator4Var);
+        for (let i = 0; i < mod.CountOf(mod.AllPlayers()); i++) {
             mod.SetVariable(ID_PoolGlobalVar, filterModArray(
                 mod.GetVariable(ID_PoolGlobalVar),
-                (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, mod.GetVariable(mod.ObjectVariable(mod.ValueInArray(mod.AllPlayers(), mod.GetVariable(iterator4GlobalVar)), UniqueIDPlayerVar)))))
+                (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, mod.GetVariable(mod.ObjectVariable(mod.ValueInArray(mod.AllPlayers(), i), UniqueIDPlayerVar)))))
         }
     }
     mod.AddUIText("ObjText", mod.CreateVector(0, 150, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(""), 36, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, eventInfo.eventPlayer)
@@ -2833,13 +2588,12 @@ async function resetFX(eventInfo: any) {
         await mod.Wait(1)
     }
     mod.SetVariable(resetFXingGlobalVar, true)
-    for (let iteratorVar = 2000; iteratorVar < 2999; iteratorVar += 1) {
-        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, iteratorPlayerVar), iteratorVar);
-        mod.EnableVFX(mod.GetVFX(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, iteratorPlayerVar))), false)
-        mod.EnableVFX(mod.GetVFX(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, iteratorPlayerVar))), true)
+    for (let i = 2000; i < 2999; i++) {
+        mod.EnableVFX(mod.GetVFX(i), false)
+        mod.EnableVFX(mod.GetVFX(i), true)
         if (mod.Equals(
             mod.RoundToInteger(mod.Modulo(
-                mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, iteratorPlayerVar)),
+                i,
                 5)),
             0)) {
             await mod.Wait(0.066)

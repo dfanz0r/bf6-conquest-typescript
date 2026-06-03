@@ -156,8 +156,6 @@ Use native arrays only where values are consumed by native TS indexing/loops.
 const flagAnnounce: mod.VoiceOverFlags[] = [];
 const flagLetters: string[] = [];
 const botNames: string[] = [];
-const uiIdPool: string[] = [];
-const activeUiIds = new Set<string>();
 const objectiveTrackingUI: string[] = [];
 ```
 
@@ -920,27 +918,60 @@ for (let i = 0; i < mod.CountOf(playersOnPoint); i++) {
 
 No replacement variable needed.
 
-### 7g. UI ID Pool
+### 7g. Remove UI ID Pool
 
-Use native structures:
+Do not keep the numeric text-object pool long term. The current pool exists only to generate unique per-player root UI widget names. The old block-editor-generated list had quirks around censored block text, but TypeScript does not need to preserve those exact skipped values as long as the pool has enough unique names during transition.
+
+Replace the pool with deterministic names based on the player's object ID:
 
 ```ts
-function acquireUiId(): string {
-    if (uiIdPool.length <= 1) rebuildUiIdPool();
-    const id = uiIdPool.shift() ?? "1";
-    activeUiIds.add(id);
-    return id;
+function playerRootWidgetName(player: mod.Player): string {
+    return `PlayerRoot_${mod.GetObjId(player)}`;
 }
 
-function releasePlayerUiId(state: PlayerState): void {
-    if (!state.uniqueUiId) return;
-    activeUiIds.delete(state.uniqueUiId);
-    uiIdPool.push(state.uniqueUiId);
-    state.uniqueUiId = "";
+function playerRootWidgetNameFromId(playerId: number): string {
+    return `PlayerRoot_${playerId}`;
 }
 ```
 
-Keep current defensive behavior that deletes an existing widget if an ID is accidentally reused.
+Then player setup becomes:
+
+```ts
+const state = getPlayerState(eventInfo.eventPlayer);
+state.uniqueUiId = playerRootWidgetName(eventInfo.eventPlayer);
+
+mod.DeleteUIWidget(mod.FindUIWidgetWithName(state.uniqueUiId)); // defensive cleanup if it exists
+mod.AddUIContainer(
+    state.uniqueUiId,
+    mod.CreateVector(0, 0, 0),
+    mod.CreateVector(10000, 10000, 0),
+    mod.UIAnchor.TopCenter,
+    eventInfo.eventPlayer,
+);
+```
+
+On leave, delete by deterministic name when possible:
+
+```ts
+function removePlayerStateById(playerId: number): void {
+    const state = playerStates.get(playerId);
+    const rootName = state?.uniqueUiId || playerRootWidgetNameFromId(playerId);
+    mod.DeleteUIWidget(mod.FindUIWidgetWithName(rootName));
+    playerStates.delete(playerId);
+    playerById.delete(playerId);
+}
+```
+
+This eliminates:
+
+- `ID_PoolGlobalVar`
+- `UniqueUI_ID_UsedGlobalVar`
+- `uiIdPool`
+- `activeUiIds`
+- pool rebuild logic
+- the numeric-name pool entirely
+
+During transition, a simple `"1"` through `"105"` pool is acceptable if it has the correct number of unique elements. Long term, replace it with `PlayerRoot_<objectId>` and delete the pool.
 
 ---
 
