@@ -311,8 +311,8 @@ function initStaticArrays(): void {
     uiIdPool.length = 0;
     activeUiIds.clear();
 
-    // Fill these by migrating the existing UniquePlayerUI1(), ObjectiveLetters(),
-    // ObjectiveTeamUI_Array(), AddBotNames(), and FlagCalls() data.
+    // Fill these by migrating the existing initPlayerUIIds(), initObjectiveLetters(),
+    // initObjectiveTeamUI(), initBotNames(), and initFlagCalls() data.
 }
 
 function initPlayerState(player: mod.Player): PlayerState {
@@ -344,7 +344,7 @@ function removePlayerStateById(playerId: number): void {
 // END STATE FOUNDATION
 // ============================================================
 
-function OngoingGlobal_Initialise_Action() {
+function initGameSettings() {
     mod.SetVariable(GameOngoingGlobalVar, false)
     mod.SetVariable(EnableCustomAIGlobalVar, true)
     mod.SetVariable(MaxCustomAIGlobalVar, 36)
@@ -382,7 +382,7 @@ function OngoingGlobal_Initialise_Action() {
     mod.SetVariable(FriendlyBGColourGlobalVar, mod.CreateVector(0, 0.2, 0.5))
     mod.SetVariable(EnemyTextColourGlobalVar, mod.CreateVector(1, 0.2, 0.2))
     mod.SetVariable(EnemyBGColourGlobalVar, mod.CreateVector(0.6, 0.1, 0.1))
-    mod.SetVariable(FX_ResetingGlobalVar, false)
+    mod.SetVariable(resetFXingGlobalVar, false)
     mod.SetVariable(CapturePointProgressGlobalVar, mod.EmptyArray())
     mod.SetVariable(UniqueUI_ID_UsedGlobalVar, mod.EmptyArray())
     mod.SetVariable(tempGlobalVar, mod.EmptyArray())
@@ -398,21 +398,21 @@ function OngoingGlobal_Initialise_Action() {
     mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), Cap_ProgressTeamVar), mod.EmptyArray())
     mod.SetVariable(CaptureProgressSizeGlobalVar, mod.EmptyArray())
     mod.SetVariable(CaptureProgressPositionGlobalVar, mod.EmptyArray())
-    UniquePlayerUI1()
-    ObjectiveLetters()
-    ObjectiveTeamUI_Array()
-    AddBotNames()
-    FlagCalls()
+    initPlayerUIIds()
+    initObjectiveLetters()
+    initObjectiveTeamUI()
+    initBotNames()
+    initFlagCalls()
 }
-function OngoingGlobal_Initialise(conditionState: any) {
+function initGameSettingsRule(conditionState: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_Initialise_Action();
+    initGameSettings();
 }
 
-async function OnGameModeStarted_MapSetup_Action() {
+async function setupMap() {
     mod.SetGameModeTimeLimit(mod.GetVariable(TimeLimitGlobalVar))
     mod.SetGameModeTargetScore(1)
     mod.SetVehicleCategoryAllowedInSurroundingArea(mod.VehicleCategories.Air_All, true)
@@ -426,9 +426,9 @@ async function OnGameModeStarted_MapSetup_Action() {
     } else {
         mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), FactionTeamVar), "PAX")
     }
-    MainUI_ScoreandTime()
-    Scoreboard()
-    FlagIconsUpdate()
+    setupMainUI()
+    updateScoreboard()
+    updateFlagIcons()
     if (mod.GetVariable(EnableSnowGlobalVar)) {
         mod.SetVariable(SnowGlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.EnvironmentDecalVolume_Winter_Event, mod.GetObjectPosition(mod.GetCapturePoint(200)), mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 10000)))
     }
@@ -450,11 +450,11 @@ async function OnGameModeStarted_MapSetup_Action() {
     }
     for (let iteratorVar = 0; iteratorVar < mod.CountOf(mod.AllCapturePoints()); iteratorVar += 1) {
         mod.SetVariable(iteratorGlobalVar, iteratorVar);
-        CapturePointSetup(mod.ValueInArray(mod.AllCapturePoints(), mod.GetVariable(iteratorGlobalVar)))
+        setupCapturePoint(mod.ValueInArray(mod.AllCapturePoints(), mod.GetVariable(iteratorGlobalVar)))
     }
     mod.SetUnspawnDelayInSeconds(mod.GetSpawner(901), 300)
     mod.SetUnspawnDelayInSeconds(mod.GetSpawner(902), 300)
-    Version()
+    showVersion()
     mod.SetVariable(VO1GlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
     mod.SetVariable(VO2GlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
     mod.SetVariable(VO3GlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
@@ -493,15 +493,15 @@ async function OnGameModeStarted_MapSetup_Action() {
         }
     }
 }
-function OnGameModeStarted_MapSetup(conditionState: any) {
+function setupMapRule(conditionState: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    OnGameModeStarted_MapSetup_Action();
+    setupMap();
 }
 
-function OngoingGlobal_Update_Score_and_Time_Condition(): boolean {
+function shouldUpdateScoreTime(): boolean {
     const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Equals(
         mod.Modulo(
             mod.RoundToInteger(mod.GetMatchTimeElapsed()),
@@ -510,22 +510,22 @@ function OngoingGlobal_Update_Score_and_Time_Condition(): boolean {
     return newState;
 }
 
-async function OngoingGlobal_Update_Score_and_Time_Action() {
-    Scoreboard()
-    Add_AI()
+async function updateScoreTimeAndAI() {
+    updateScoreboard()
+    addAI()
     await mod.Wait(0.1)
-    Add_AI()
-    ConquestAssaultWinCheck()
+    addAI()
+    checkConquestAssaultWin()
 }
-function OngoingGlobal_Update_Score_and_Time(conditionState: any) {
-    let newState = OngoingGlobal_Update_Score_and_Time_Condition();
+function updateScoreTimeRule(conditionState: any) {
+    let newState = shouldUpdateScoreTime();
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_Update_Score_and_Time_Action();
+    updateScoreTimeAndAI();
 }
 
-function OngoingGlobal_Update_Score_and_Time1_Condition(): boolean {
+function shouldUpdateScoreTimeOddTick(): boolean {
     const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Equals(
         mod.Modulo(
             mod.RoundToInteger(mod.GetMatchTimeElapsed()),
@@ -534,21 +534,21 @@ function OngoingGlobal_Update_Score_and_Time1_Condition(): boolean {
     return newState;
 }
 
-async function OngoingGlobal_Update_Score_and_Time1_Action() {
-    Scoreboard()
-    Add_AI()
+async function updateScoreTimeAndAISecondaryTick() {
+    updateScoreboard()
+    addAI()
     await mod.Wait(0.1)
-    Add_AI()
+    addAI()
 }
-function OngoingGlobal_Update_Score_and_Time1(conditionState: any) {
-    let newState = OngoingGlobal_Update_Score_and_Time1_Condition();
+function updateScoreTimeSecondaryTickRule(conditionState: any) {
+    let newState = shouldUpdateScoreTimeOddTick();
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_Update_Score_and_Time1_Action();
+    updateScoreTimeAndAISecondaryTick();
 }
 
-function OngoingGlobal_Score_tracker_Condition(): boolean {
+function shouldTrackScore(): boolean {
     const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Equals(
         mod.Modulo(
             mod.RoundToInteger(mod.GetMatchTimeElapsed()),
@@ -557,7 +557,7 @@ function OngoingGlobal_Score_tracker_Condition(): boolean {
     return newState;
 }
 
-function OngoingGlobal_Score_tracker_Action() {
+function trackScoreAndBleed() {
     if (mod.GetVariable(TotalControlTicketBleedGlobalVar)) {
         if (modlib.IsTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
             mod.GetCurrentOwnerTeam(currentArrayElement),
@@ -599,8 +599,8 @@ function OngoingGlobal_Score_tracker_Action() {
                         (currentArrayElement: any) => mod.Equals(
                             mod.GetCurrentOwnerTeam(currentArrayElement),
                             mod.GetTeam(1)))))))
-            Scoreboard()
-            UIFlashAnimation("LeftFlash1", "RightFlash2")
+            updateScoreboard()
+            animateUIFlash("LeftFlash1", "RightFlash2")
         }
         if (mod.GreaterThan(
             mod.CountOf(modlib.FilteredArray(
@@ -626,8 +626,8 @@ function OngoingGlobal_Score_tracker_Action() {
                         (currentArrayElement: any) => mod.Equals(
                             mod.GetCurrentOwnerTeam(currentArrayElement),
                             mod.GetTeam(2)))))))
-            Scoreboard()
-            UIFlashAnimation("RightFlash1", "LeftFlash2")
+            updateScoreboard()
+            animateUIFlash("RightFlash1", "LeftFlash2")
         }
     } else {
         mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar), mod.Subtract(
@@ -646,20 +646,20 @@ function OngoingGlobal_Score_tracker_Action() {
                     mod.GetTeam(1))))))
     }
 }
-function OngoingGlobal_Score_tracker(conditionState: any) {
-    let newState = OngoingGlobal_Score_tracker_Condition();
+function trackScoreRule(conditionState: any) {
+    let newState = shouldTrackScore();
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_Score_tracker_Action();
+    trackScoreAndBleed();
 }
 
-function OnPlayerEarnedKill_Ean_Kill_Condition(eventInfo: any): boolean {
+function shouldProcessKill(eventInfo: any): boolean {
     const newState = mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer));
     return newState;
 }
 
-function OnPlayerEarnedKill_Ean_Kill_Action(eventInfo: any) {
+function processKill(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, ScorePlayerVar), mod.Add(
         mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, ScorePlayerVar)),
         10))
@@ -669,59 +669,59 @@ function OnPlayerEarnedKill_Ean_Kill_Action(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerKillsPlayerVar), mod.Add(
         mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerKillsPlayerVar)),
         1))
-    UpdatePlayerScoreboard(eventInfo.eventPlayer)
+    updatePlayerScoreboard(eventInfo.eventPlayer)
 }
-function OnPlayerEarnedKill_Ean_Kill(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerEarnedKill_Ean_Kill_Condition(eventInfo);
+function processKillRule(conditionState: any, eventInfo: any) {
+    let newState = shouldProcessKill(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerEarnedKill_Ean_Kill_Action(eventInfo);
+    processKill(eventInfo);
 }
 
-function OnPlayerEarnedKillAssist_Kill_assist_Condition(eventInfo: any): boolean {
+function shouldProcessAssist(eventInfo: any): boolean {
     const newState = mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer));
     return newState;
 }
 
-function OnPlayerEarnedKillAssist_Kill_assist_Action(eventInfo: any) {
+function processAssist(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, ScorePlayerVar), mod.Add(
         mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, ScorePlayerVar)),
         5))
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, KillAssistsPlayerVar), mod.Add(
         mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, KillAssistsPlayerVar)),
         1))
-    UpdatePlayerScoreboard(eventInfo.eventPlayer)
+    updatePlayerScoreboard(eventInfo.eventPlayer)
 }
-function OnPlayerEarnedKillAssist_Kill_assist(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerEarnedKillAssist_Kill_assist_Condition(eventInfo);
+function processAssistRule(conditionState: any, eventInfo: any) {
+    let newState = shouldProcessAssist(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerEarnedKillAssist_Kill_assist_Action(eventInfo);
+    processAssist(eventInfo);
 }
 
-function OnRevived_Revive_Counter_Action(eventInfo: any) {
+function processRevive(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventOtherPlayer, ScorePlayerVar), mod.Add(
         mod.GetVariable(mod.ObjectVariable(eventInfo.eventOtherPlayer, ScorePlayerVar)),
         10))
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventOtherPlayer, RevivesPlayerVar), mod.Add(
         mod.GetVariable(mod.ObjectVariable(eventInfo.eventOtherPlayer, RevivesPlayerVar)),
         1))
-    UpdatePlayerScoreboard(eventInfo.eventOtherPlayer)
+    updatePlayerScoreboard(eventInfo.eventOtherPlayer)
 }
-function OnRevived_Revive_Counter(conditionState: any, eventInfo: any) {
+function processReviveRule(conditionState: any, eventInfo: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    OnRevived_Revive_Counter_Action(eventInfo);
+    processRevive(eventInfo);
 }
 
-async function OnPlayerDied_CustomAI_Score_Tracking_Action(eventInfo: any) {
+async function handlePlayerDeath(eventInfo: any) {
     await mod.Wait(0.1)
     if (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar))) {
-        DisableOutOfBounds(eventInfo)
+        disableOutOfBounds(eventInfo)
     }
     if (mod.GetVariable(EnableCustomAIGlobalVar)) {
         if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
@@ -736,7 +736,7 @@ async function OnPlayerDied_CustomAI_Score_Tracking_Action(eventInfo: any) {
                 mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar), mod.Add(
                     mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar)),
                     1))
-                UpdatePlayerScoreboard(eventInfo.eventPlayer)
+                updatePlayerScoreboard(eventInfo.eventPlayer)
                 if (mod.GreaterThan(
                     mod.DistanceBetween(
                         mod.GetObjectPosition(eventInfo.eventPlayer),
@@ -751,28 +751,28 @@ async function OnPlayerDied_CustomAI_Score_Tracking_Action(eventInfo: any) {
         }
     }
 }
-function OnPlayerDied_CustomAI_Score_Tracking(conditionState: any, eventInfo: any) {
+function handlePlayerDeathRule(conditionState: any, eventInfo: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerDied_CustomAI_Score_Tracking_Action(eventInfo);
+    handlePlayerDeath(eventInfo);
 }
 
-function OnPlayerDeployed_Add_Equipment_Action(eventInfo: any) {
+function addEquipment(eventInfo: any) {
     if (mod.GetVariable(GivePlayersNVGGlobalVar)) {
         mod.AddEquipment(eventInfo.eventPlayer, mod.Gadgets.Mask_NVG)
     }
 }
-function OnPlayerDeployed_Add_Equipment(conditionState: any, eventInfo: any) {
+function addEquipmentRule(conditionState: any, eventInfo: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerDeployed_Add_Equipment_Action(eventInfo);
+    addEquipment(eventInfo);
 }
 
-async function OnPlayerJoinGame_Sets_Scoreboard_Action(eventInfo: any) {
+async function handlePlayerJoin(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), -1)
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar), false)
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar), false)
@@ -780,32 +780,32 @@ async function OnPlayerJoinGame_Sets_Scoreboard_Action(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar), false)
     await mod.Wait(1)
     if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
-        UpdatePlayerScoreboard(eventInfo.eventPlayer)
+        updatePlayerScoreboard(eventInfo.eventPlayer)
         if (mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier))) {
             mod.SendErrorReport(mod.Message("Player Joined {}", eventInfo.eventPlayer))
-            PlayerUISetup(eventInfo)
+            setupPlayerUI(eventInfo)
             await mod.Wait(5)
             if (mod.GetVariable(GameOngoingGlobalVar)) {
                 await mod.Wait(0.1)
-                FX_Reset(eventInfo)
+                resetFX(eventInfo)
             }
         }
     }
 }
-function OnPlayerJoinGame_Sets_Scoreboard(conditionState: any, eventInfo: any) {
+function handlePlayerJoinRule(conditionState: any, eventInfo: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerJoinGame_Sets_Scoreboard_Action(eventInfo);
+    handlePlayerJoin(eventInfo);
 }
 
-function OnPlayerUndeploy_Death_Update_Condition(eventInfo: any): boolean {
+function shouldUpdateDeathOnUndeploy(eventInfo: any): boolean {
     const newState = mod.GetVariable(GameOngoingGlobalVar);
     return newState;
 }
 
-function OnPlayerUndeploy_Death_Update_Action(eventInfo: any) {
+function updateDeathOnUndeploy(eventInfo: any) {
     if (mod.GetVariable(PlayerDeathsBleedGlobalVar)) {
         mod.SetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), TeamScoreTeamVar), mod.Subtract(
             mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), TeamScoreTeamVar)),
@@ -815,21 +815,21 @@ function OnPlayerUndeploy_Death_Update_Action(eventInfo: any) {
         mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar)),
         1))
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar), false)
-    UpdatePlayerScoreboard(eventInfo.eventPlayer)
-    Scoreboard()
+    updatePlayerScoreboard(eventInfo.eventPlayer)
+    updateScoreboard()
 }
-function OnPlayerUndeploy_Death_Update(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerUndeploy_Death_Update_Condition(eventInfo);
+function updateDeathOnUndeployRule(conditionState: any, eventInfo: any) {
+    let newState = shouldUpdateDeathOnUndeploy(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerUndeploy_Death_Update_Action(eventInfo);
+    updateDeathOnUndeploy(eventInfo);
 }
 
-async function OnCapturePointCaptured_On_Capture_Action(eventInfo: any) {
+async function handleCapturePointCaptured(eventInfo: any) {
     await mod.Wait(0.2)
-    Scoreboard()
-    FlagIconsUpdate()
+    updateScoreboard()
+    updateFlagIcons()
     mod.SetVariable(PlayersOnObjectiveGlobalVar, mod.EmptyArray())
     mod.SetVariable(PlayersOnObjectiveGlobalVar, modlib.FilteredArray(
         mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
@@ -838,12 +838,12 @@ async function OnCapturePointCaptured_On_Capture_Action(eventInfo: any) {
             mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))))
     for (let iteratorVar = 0; iteratorVar < mod.CountOf(mod.GetVariable(PlayersOnObjectiveGlobalVar)); iteratorVar += 1) {
         mod.SetVariable(iteratorGlobalVar, iteratorVar);
-        ObjectiveCapturedPlayerData(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), mod.GetVariable(iteratorGlobalVar)))
+        processObjectivePlayerData(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), mod.GetVariable(iteratorGlobalVar)))
         if (mod.GetSoldierState(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), mod.GetVariable(iteratorGlobalVar)), mod.SoldierStateBool.IsAISoldier)) {
-            AI_Scouting(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), mod.GetVariable(iteratorGlobalVar)))
+            startAIScouting(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), mod.GetVariable(iteratorGlobalVar)))
         }
     }
-    ObjectiveVehicleSpawn(eventInfo)
+    spawnObjectiveVehicles(eventInfo)
     if (mod.GetVariable(EnableVOGlobalVar)) {
         mod.PlayVO(mod.GetVariable(VO1GlobalVar), mod.VoiceOverEvents2D.ObjectiveCaptured, mod.ValueInArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.Subtract(
             mod.GetObjId(eventInfo.eventCapturePoint),
@@ -853,25 +853,25 @@ async function OnCapturePointCaptured_On_Capture_Action(eventInfo: any) {
             200)), mod.GetVariable(mod.ObjectVariable(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint), OtherTeamTeamVar)))
     }
 }
-function OnCapturePointCaptured_On_Capture(conditionState: any, eventInfo: any) {
+function handleCapturePointCapturedRule(conditionState: any, eventInfo: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    OnCapturePointCaptured_On_Capture_Action(eventInfo);
+    handleCapturePointCaptured(eventInfo);
 }
 
-function OnCapturePointCapturing_Notify_Capture_Condition(eventInfo: any): boolean {
+function shouldNotifyCapture(eventInfo: any): boolean {
     const newState = modlib.And(mod.GetVariable(EnableVOGlobalVar), mod.Equals(
         mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
         mod.GetTeam(0)), mod.LessThan(mod.GetCaptureProgress(eventInfo.eventCapturePoint), 0.05))
     return newState;
 }
 
-async function OnCapturePointCapturing_Notify_Capture_Action(eventInfo: any) {
-    FlagIconsUpdate()
+async function notifyCapture(eventInfo: any) {
+    updateFlagIcons()
     await mod.Wait(0.2)
-    Scoreboard()
+    updateScoreboard()
     if (mod.NotEqualTo(mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint), mod.GetTeam(0))) {
         mod.PlayVO(mod.GetVariable(VO3GlobalVar), mod.VoiceOverEvents2D.ObjectiveNeutralised, mod.ValueInArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.Subtract(
             mod.GetObjId(eventInfo.eventCapturePoint),
@@ -885,15 +885,15 @@ async function OnCapturePointCapturing_Notify_Capture_Action(eventInfo: any) {
             200)), mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
     }
 }
-function OnCapturePointCapturing_Notify_Capture(conditionState: any, eventInfo: any) {
-    let newState = OnCapturePointCapturing_Notify_Capture_Condition(eventInfo);
+function notifyCaptureRule(conditionState: any, eventInfo: any) {
+    let newState = shouldNotifyCapture(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnCapturePointCapturing_Notify_Capture_Action(eventInfo);
+    notifyCapture(eventInfo);
 }
 
-function OngoingGlobal_Near_End_Music_Trigger_Condition(): boolean {
+function shouldPlayNearEndMusic(): boolean {
     const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Or(
         mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 60),
         mod.Or(
@@ -902,18 +902,18 @@ function OngoingGlobal_Near_End_Music_Trigger_Condition(): boolean {
     return newState;
 }
 
-function OngoingGlobal_Near_End_Music_Trigger_Action() {
+function playNearEndMusic() {
     mod.PlayMusic(mod.MusicEvents.Core_Overtime_Loop)
 }
-function OngoingGlobal_Near_End_Music_Trigger(conditionState: any) {
-    let newState = OngoingGlobal_Near_End_Music_Trigger_Condition();
+function playNearEndMusicRule(conditionState: any) {
+    let newState = shouldPlayNearEndMusic();
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_Near_End_Music_Trigger_Action();
+    playNearEndMusic();
 }
 
-function OngoingGlobal_End_Game_Condition(): boolean {
+function shouldEndGame(): boolean {
     const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Or(
         mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 1),
         mod.Or(
@@ -922,7 +922,7 @@ function OngoingGlobal_End_Game_Condition(): boolean {
     return newState;
 }
 
-async function OngoingGlobal_End_Game_Action() {
+async function endGame() {
     mod.SetVariable(GameOngoingGlobalVar, false)
     mod.PauseGameModeTime(true)
     if (mod.LessThan(
@@ -948,7 +948,7 @@ async function OngoingGlobal_End_Game_Action() {
     mod.PlayMusic(mod.MusicEvents.Core_EndOfRound_Loop)
     mod.SetVariable(ScorePositionLeftGlobalVar, mod.CreateVector(-300, 385, 0))
     mod.SetVariable(ScorePositionRightGlobalVar, mod.CreateVector(300, 385, 0))
-    Scoreboard()
+    updateScoreboard()
     mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Timer"), mod.CreateVector(190, 60, 0))
     mod.SetUITextSize(mod.FindUIWidgetWithName("Timer"), 48)
     mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Timer"), mod.CreateVector(0, 390, 0))
@@ -962,10 +962,10 @@ async function OngoingGlobal_End_Game_Action() {
         mod.SetVariable(iteratorGlobalVar, iteratorVar);
         mod.DeleteUIWidget(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.GetVariable(iteratorGlobalVar))))
     }
-    EndGame_UI("Team1ScoreLeft", mod.GetVariable(ScorePositionLeftGlobalVar))
-    EndGame_UI("Team1ScoreRight", mod.GetVariable(ScorePositionRightGlobalVar))
-    EndGame_UI("Team2ScoreLeft", mod.GetVariable(ScorePositionLeftGlobalVar))
-    EndGame_UI("Team2ScoreRight", mod.GetVariable(ScorePositionRightGlobalVar))
+    showEndGameUI("Team1ScoreLeft", mod.GetVariable(ScorePositionLeftGlobalVar))
+    showEndGameUI("Team1ScoreRight", mod.GetVariable(ScorePositionRightGlobalVar))
+    showEndGameUI("Team2ScoreLeft", mod.GetVariable(ScorePositionLeftGlobalVar))
+    showEndGameUI("Team2ScoreRight", mod.GetVariable(ScorePositionRightGlobalVar))
     await mod.Wait(4)
     if (mod.GreaterThan(
         mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
@@ -979,20 +979,20 @@ async function OngoingGlobal_End_Game_Action() {
         mod.EndGameMode(mod.GetTeam(0))
     }
 }
-function OngoingGlobal_End_Game(conditionState: any) {
-    let newState = OngoingGlobal_End_Game_Condition();
+function endGameRule(conditionState: any) {
+    let newState = shouldEndGame();
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_End_Game_Action();
+    endGame();
 }
 
-function OnPlayerEnterCapturePoint_CapturePoint_UI_Condition(eventInfo: any): boolean {
+function shouldShowCaptureUI(eventInfo: any): boolean {
     const newState = mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar)));
     return newState;
 }
 
-async function OnPlayerEnterCapturePoint_CapturePoint_UI_Action(eventInfo: any) {
+async function showCaptureUI(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar), eventInfo.eventCapturePoint)
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar), mod.GetCaptureProgress(eventInfo.eventCapturePoint))
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, FlagOwnerPlayerVar), mod.GetTeam(3))
@@ -1014,7 +1014,7 @@ async function OnPlayerEnterCapturePoint_CapturePoint_UI_Action(eventInfo: any) 
                 mod.GetTeam(currentArrayElement),
                 mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)))))))
     await mod.Wait(0.05)
-    CapturePointUI_Manager(eventInfo.eventCapturePoint, mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar)), eventInfo)
+    manageCapturePointUI(eventInfo.eventCapturePoint, mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar)), eventInfo)
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar), true)
     if (mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier))) {
         mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), 9)
@@ -1023,33 +1023,33 @@ async function OnPlayerEnterCapturePoint_CapturePoint_UI_Action(eventInfo: any) 
                 break
             }
             if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive)) {
-                PlayerCapturepointUIToggle(true, eventInfo)
-                PlayerCapturepointUI(eventInfo)
+                togglePlayerCaptureUI(true, eventInfo)
+                updatePlayerCaptureUI(eventInfo)
             } else {
-                PlayerCapturepointUIToggle(false, eventInfo)
+                togglePlayerCaptureUI(false, eventInfo)
             }
             mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar), mod.GetCaptureProgress(eventInfo.eventCapturePoint))
             mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, FlagOwnerPlayerVar), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))
             while (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar))) { await mod.Wait(0.1) }
         }
         mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), -1)
-        PlayerCapturepointUIToggle(false, eventInfo)
+        togglePlayerCaptureUI(false, eventInfo)
     }
 }
-function OnPlayerEnterCapturePoint_CapturePoint_UI(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerEnterCapturePoint_CapturePoint_UI_Condition(eventInfo);
+function showCaptureUIRule(conditionState: any, eventInfo: any) {
+    let newState = shouldShowCaptureUI(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerEnterCapturePoint_CapturePoint_UI_Action(eventInfo);
+    showCaptureUI(eventInfo);
 }
 
-function OnPlayerExitCapturePoint_Remove_CapturePoint_UI_Condition(eventInfo: any): boolean {
+function shouldHideCaptureUI(eventInfo: any): boolean {
     const newState = mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar));
     return newState;
 }
 
-function OnPlayerExitCapturePoint_Remove_CapturePoint_UI_Action(eventInfo: any) {
+function hideCaptureUI(eventInfo: any) {
     mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), modlib.FilteredArray(
         mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
@@ -1062,20 +1062,20 @@ function OnPlayerExitCapturePoint_Remove_CapturePoint_UI_Action(eventInfo: any) 
                 mod.GetTeam(eventInfo.eventPlayer))))))
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar), false)
 }
-function OnPlayerExitCapturePoint_Remove_CapturePoint_UI(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerExitCapturePoint_Remove_CapturePoint_UI_Condition(eventInfo);
+function hideCaptureUIRule(conditionState: any, eventInfo: any) {
+    let newState = shouldHideCaptureUI(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerExitCapturePoint_Remove_CapturePoint_UI_Action(eventInfo);
+    hideCaptureUI(eventInfo);
 }
 
-function OnPlayerDied_Update_Player_Count_On_Death_Condition(eventInfo: any): boolean {
+function shouldUpdatePlayerCountOnDeath(eventInfo: any): boolean {
     const newState = mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar));
     return newState;
 }
 
-function OnPlayerDied_Update_Player_Count_On_Death_Action(eventInfo: any) {
+function updatePlayerCountOnDeath(eventInfo: any) {
     mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), modlib.FilteredArray(
         mod.GetPlayersOnPoint(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
@@ -1087,20 +1087,20 @@ function OnPlayerDied_Update_Player_Count_On_Death_Action(eventInfo: any) {
                 mod.GetTeam(currentArrayElement),
                 mod.GetTeam(eventInfo.eventPlayer))))))
 }
-function OnPlayerDied_Update_Player_Count_On_Death(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerDied_Update_Player_Count_On_Death_Condition(eventInfo);
+function updatePlayerCountOnDeathRule(conditionState: any, eventInfo: any) {
+    let newState = shouldUpdatePlayerCountOnDeath(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerDied_Update_Player_Count_On_Death_Action(eventInfo);
+    updatePlayerCountOnDeath(eventInfo);
 }
 
-function OnRevived_Update_Player_Count_When_Revived_Condition(eventInfo: any): boolean {
+function shouldUpdatePlayerCountOnRevive(eventInfo: any): boolean {
     const newState = mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar));
     return newState;
 }
 
-function OnRevived_Update_Player_Count_When_Revived_Action(eventInfo: any) {
+function updatePlayerCountOnRevive(eventInfo: any) {
     mod.SetVariableAtIndex(tempGlobalVar, mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))), modlib.FilteredArray(
         mod.GetPlayersOnPoint(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement)))
@@ -1112,15 +1112,15 @@ function OnRevived_Update_Player_Count_When_Revived_Action(eventInfo: any) {
                 mod.GetTeam(currentArrayElement),
                 mod.GetTeam(eventInfo.eventPlayer))))))
 }
-function OnRevived_Update_Player_Count_When_Revived(conditionState: any, eventInfo: any) {
-    let newState = OnRevived_Update_Player_Count_When_Revived_Condition(eventInfo);
+function updatePlayerCountOnReviveRule(conditionState: any, eventInfo: any) {
+    let newState = shouldUpdatePlayerCountOnRevive(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnRevived_Update_Player_Count_When_Revived_Action(eventInfo);
+    updatePlayerCountOnRevive(eventInfo);
 }
 
-async function OnPlayerInteract_Team_Switcher_and_Repel_Logic_Action(eventInfo: any) {
+async function handleTeamSwitchAndRepel(eventInfo: any) {
     if (mod.GetVariable(EnableTeamSwitchingGlobalVar)) {
         if (mod.Or(
             mod.Equals(
@@ -1138,7 +1138,7 @@ async function OnPlayerInteract_Team_Switcher_and_Repel_Logic_Action(eventInfo: 
             mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar), mod.Subtract(
                 mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar)),
                 1))
-            UpdatePlayerScoreboard(eventInfo.eventPlayer)
+            updatePlayerScoreboard(eventInfo.eventPlayer)
             await mod.Wait(2)
             mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, IgnoreOOBPlayerVar), false)
         }
@@ -1150,7 +1150,7 @@ async function OnPlayerInteract_Team_Switcher_and_Repel_Logic_Action(eventInfo: 
         mod.LessThan(
             mod.GetObjId(eventInfo.eventInteractPoint),
             750))) {
-        RepelLogic(mod.Divide(
+        applyRepelForce(mod.Divide(
             mod.DistanceBetween(
                 mod.GetObjectPosition(eventInfo.eventPlayer),
                 mod.GetObjectPosition(mod.GetSpatialObject(mod.Add(
@@ -1159,15 +1159,15 @@ async function OnPlayerInteract_Team_Switcher_and_Repel_Logic_Action(eventInfo: 
             8), eventInfo)
     }
 }
-function OnPlayerInteract_Team_Switcher_and_Repel_Logic(conditionState: any, eventInfo: any) {
+function handleTeamSwitchAndRepelRule(conditionState: any, eventInfo: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerInteract_Team_Switcher_and_Repel_Logic_Action(eventInfo);
+    handleTeamSwitchAndRepel(eventInfo);
 }
 
-function OnPlayerEnterAreaTrigger_EnterArea_Condition(eventInfo: any): boolean {
+function shouldEnterAreaTrigger(eventInfo: any): boolean {
     const newState = mod.Or(
         mod.Or(
             mod.And(
@@ -1202,20 +1202,20 @@ function OnPlayerEnterAreaTrigger_EnterArea_Condition(eventInfo: any): boolean {
     return newState;
 }
 
-function OnPlayerEnterAreaTrigger_EnterArea_Action(eventInfo: any) {
+function enterAreaTrigger(eventInfo: any) {
     if (mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar)))) {
-        OutOfBounds(eventInfo)
+        handleOutOfBounds(eventInfo)
     }
 }
-function OnPlayerEnterAreaTrigger_EnterArea(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerEnterAreaTrigger_EnterArea_Condition(eventInfo);
+function enterAreaTriggerRule(conditionState: any, eventInfo: any) {
+    let newState = shouldEnterAreaTrigger(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerEnterAreaTrigger_EnterArea_Action(eventInfo);
+    enterAreaTrigger(eventInfo);
 }
 
-function OnPlayerExitAreaTrigger_Exit_Area_Condition(eventInfo: any): boolean {
+function shouldExitAreaTrigger(eventInfo: any): boolean {
     const newState = mod.Or(
         mod.Or(
             mod.Or(
@@ -1252,107 +1252,107 @@ function OnPlayerExitAreaTrigger_Exit_Area_Condition(eventInfo: any): boolean {
     return newState;
 }
 
-function OnPlayerExitAreaTrigger_Exit_Area_Action(eventInfo: any) {
-    DisableOutOfBounds(eventInfo)
+function exitAreaTrigger(eventInfo: any) {
+    disableOutOfBounds(eventInfo)
 }
-function OnPlayerExitAreaTrigger_Exit_Area(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerExitAreaTrigger_Exit_Area_Condition(eventInfo);
+function exitAreaTriggerRule(conditionState: any, eventInfo: any) {
+    let newState = shouldExitAreaTrigger(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerExitAreaTrigger_Exit_Area_Action(eventInfo);
+    exitAreaTrigger(eventInfo);
 }
 
-function OngoingGlobal_VO_Low_Time_Condition(): boolean {
+function shouldPlayVOLowTime(): boolean {
     const newState = modlib.And(mod.GetVariable(GameOngoingGlobalVar), mod.GetVariable(EnableVOGlobalVar), mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 300));
     return newState;
 }
 
-function OngoingGlobal_VO_Low_Time_Action() {
+function playVOLowTime() {
     mod.PlayVO(mod.GetVariable(VO5GlobalVar), mod.VoiceOverEvents2D.TimeLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
     mod.PlayVO(mod.GetVariable(VO6GlobalVar), mod.VoiceOverEvents2D.TimeLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
 }
-function OngoingGlobal_VO_Low_Time(conditionState: any) {
-    let newState = OngoingGlobal_VO_Low_Time_Condition();
+function playVOLowTimeRule(conditionState: any) {
+    let newState = shouldPlayVOLowTime();
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_VO_Low_Time_Action();
+    playVOLowTime();
 }
 
-function OngoingGlobal_VO_Winning_Condition(): boolean {
+function shouldPlayVOWinning(): boolean {
     const newState = modlib.And(mod.GetVariable(GameOngoingGlobalVar), mod.GetVariable(EnableVOGlobalVar), mod.GreaterThan(
         mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
         mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar))))
     return newState;
 }
 
-function OngoingGlobal_VO_Winning_Action() {
+function playVOWinning() {
     mod.PlayVO(mod.GetVariable(VO5GlobalVar), mod.VoiceOverEvents2D.ProgressMidWinning, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
     mod.PlayVO(mod.GetVariable(VO6GlobalVar), mod.VoiceOverEvents2D.ProgressMidLosing, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
 }
-function OngoingGlobal_VO_Winning(conditionState: any) {
-    let newState = OngoingGlobal_VO_Winning_Condition();
+function playVOWinningRule(conditionState: any) {
+    let newState = shouldPlayVOWinning();
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_VO_Winning_Action();
+    playVOWinning();
 }
 
-function OngoingGlobal_VO_Winning1_Condition(): boolean {
+function shouldPlayVOTeam2Winning(): boolean {
     const newState = modlib.And(mod.GetVariable(GameOngoingGlobalVar), mod.GetVariable(EnableVOGlobalVar), mod.GreaterThan(
         mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
         mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar))))
     return newState;
 }
 
-function OngoingGlobal_VO_Winning1_Action() {
+function playVOTeam2Winning() {
     mod.PlayVO(mod.GetVariable(VO5GlobalVar), mod.VoiceOverEvents2D.ProgressMidWinning, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
     mod.PlayVO(mod.GetVariable(VO6GlobalVar), mod.VoiceOverEvents2D.ProgressMidLosing, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
 }
-function OngoingGlobal_VO_Winning1(conditionState: any) {
-    let newState = OngoingGlobal_VO_Winning1_Condition();
+function playVOTeam2WinningRule(conditionState: any) {
+    let newState = shouldPlayVOTeam2Winning();
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_VO_Winning1_Action();
+    playVOTeam2Winning();
 }
 
-function OngoingGlobal_VO_Low_Tickets_Condition(): boolean {
+function shouldPlayVOLowTickets(): boolean {
     const newState = modlib.And(mod.GetVariable(GameOngoingGlobalVar), mod.GetVariable(EnableVOGlobalVar), mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)), mod.GetVariable(LowTicketMusicGlobalVar)));
     return newState;
 }
 
-function OngoingGlobal_VO_Low_Tickets_Action() {
+function playVOLowTickets() {
     mod.PlayVO(mod.GetVariable(VO5GlobalVar), mod.VoiceOverEvents2D.PlayerCountFriendlyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
     mod.PlayVO(mod.GetVariable(VO6GlobalVar), mod.VoiceOverEvents2D.PlayerCountEnemyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
 }
-function OngoingGlobal_VO_Low_Tickets(conditionState: any) {
-    let newState = OngoingGlobal_VO_Low_Tickets_Condition();
+function playVOLowTicketsRule(conditionState: any) {
+    let newState = shouldPlayVOLowTickets();
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_VO_Low_Tickets_Action();
+    playVOLowTickets();
 }
 
-function OngoingGlobal_VO_Low_Tickets1_Condition(): boolean {
+function shouldPlayVOTeam2LowTickets(): boolean {
     const newState = modlib.And(mod.GetVariable(GameOngoingGlobalVar), mod.GetVariable(EnableVOGlobalVar), mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)), mod.GetVariable(LowTicketMusicGlobalVar)));
     return newState;
 }
 
-function OngoingGlobal_VO_Low_Tickets1_Action() {
+function playVOTeam2LowTickets() {
     mod.PlayVO(mod.GetVariable(VO5GlobalVar), mod.VoiceOverEvents2D.PlayerCountFriendlyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
     mod.PlayVO(mod.GetVariable(VO6GlobalVar), mod.VoiceOverEvents2D.PlayerCountEnemyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
 }
-function OngoingGlobal_VO_Low_Tickets1(conditionState: any) {
-    let newState = OngoingGlobal_VO_Low_Tickets1_Condition();
+function playVOTeam2LowTicketsRule(conditionState: any) {
+    let newState = shouldPlayVOTeam2LowTickets();
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingGlobal_VO_Low_Tickets1_Action();
+    playVOTeam2LowTickets();
 }
 
-async function OngoingCapturePoint_Capture_Times_Action(eventInfo: any) {
+async function updateCaptureProgress(eventInfo: any) {
     while (!mod.GetVariable(GameOngoingGlobalVar)) { await mod.Wait(999) }
     if (mod.GetVariable(ConquestAssaultGlobalVar)) {
         mod.SetCapturePointOwner(eventInfo.eventCapturePoint, mod.GetTeam(2))
@@ -1420,46 +1420,46 @@ async function OngoingCapturePoint_Capture_Times_Action(eventInfo: any) {
                 mod.Floor(mod.Divide(
                     mod.Multiply(220, mod.GetCaptureProgress(eventInfo.eventCapturePoint)),
                     2))), 200, 0))
-            CapturePointUI_Manager(eventInfo.eventCapturePoint, mod.ValueInArray(mod.GetVariable(CapturePointProgressGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)), eventInfo)
+            manageCapturePointUI(eventInfo.eventCapturePoint, mod.ValueInArray(mod.GetVariable(CapturePointProgressGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)), eventInfo)
         }
         mod.SetVariableAtIndex(CapturePointProgressGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.GetCaptureProgress(eventInfo.eventCapturePoint))
         await mod.Wait(0.1)
     }
 }
-function OngoingCapturePoint_Capture_Times(conditionState: any, eventInfo: any) {
+function runCaptureProgressRule(conditionState: any, eventInfo: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    OngoingCapturePoint_Capture_Times_Action(eventInfo);
+    updateCaptureProgress(eventInfo);
 }
 
-function OnPlayerDeployed_AI_Scout_Condition(eventInfo: any): boolean {
+function shouldAIScoutOnDeploy(eventInfo: any): boolean {
     const newState = mod.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
     return newState;
 }
 
-async function OnPlayerDeployed_AI_Scout_Action(eventInfo: any) {
+async function deployAIScout(eventInfo: any) {
     await mod.Wait(0.2)
     if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
         mod.SetPlayerIncomingDamageFactor(eventInfo.eventPlayer, 0.5)
-        AI_Deploy(eventInfo)
+        deployAI(eventInfo)
     }
 }
-function OnPlayerDeployed_AI_Scout(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerDeployed_AI_Scout_Condition(eventInfo);
+function aiScoutOnDeployRule(conditionState: any, eventInfo: any) {
+    let newState = shouldAIScoutOnDeploy(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerDeployed_AI_Scout_Action(eventInfo);
+    deployAIScout(eventInfo);
 }
 
-function OnPlayerEnterCapturePoint_AI_Find_New_Objective_Condition(eventInfo: any): boolean {
+function shouldAIFindNewObjective(eventInfo: any): boolean {
     const newState = modlib.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier), mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)));
     return newState;
 }
 
-async function OnPlayerEnterCapturePoint_AI_Find_New_Objective_Action(eventInfo: any) {
+async function findNewAIObjective(eventInfo: any) {
     if (mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))) {
         await mod.Wait(1.5)
         if (mod.IsType(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_TargetPlayerVar)), mod.Types.CapturePoint)) {
@@ -1472,23 +1472,23 @@ async function OnPlayerEnterCapturePoint_AI_Find_New_Objective_Action(eventInfo:
             }
         }
     } else {
-        AI_Scouting(eventInfo.eventPlayer)
+        startAIScouting(eventInfo.eventPlayer)
     }
 }
-function OnPlayerEnterCapturePoint_AI_Find_New_Objective(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerEnterCapturePoint_AI_Find_New_Objective_Condition(eventInfo);
+function aiFindNewObjectiveRule(conditionState: any, eventInfo: any) {
+    let newState = shouldAIFindNewObjective(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerEnterCapturePoint_AI_Find_New_Objective_Action(eventInfo);
+    findNewAIObjective(eventInfo);
 }
 
-function OnPlayerDeployed_AI_Ready_For_Attack_Condition(eventInfo: any): boolean {
+function shouldAIReadyForAttack(eventInfo: any): boolean {
     const newState = modlib.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier), mod.LessThanEqualTo(mod.GetVariable(MaxCustomAIGlobalVar), 70));
     return newState;
 }
 
-async function OnPlayerDeployed_AI_Ready_For_Attack_Action(eventInfo: any) {
+async function readyAIForAttack(eventInfo: any) {
     await mod.Wait(mod.RandomReal(2, 3))
     while (mod.IsPlayerValid(eventInfo.eventPlayer)) {
         if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive)) {
@@ -1503,7 +1503,7 @@ async function OnPlayerDeployed_AI_Ready_For_Attack_Action(eventInfo: any) {
                     mod.AISetMoveSpeed(eventInfo.eventPlayer, mod.MoveSpeed.InvestigateRun)
                     await mod.Wait(15)
                     if (mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar)))) {
-                        AI_Scouting(eventInfo.eventPlayer)
+                        startAIScouting(eventInfo.eventPlayer)
                     }
                 }
             }
@@ -1511,20 +1511,20 @@ async function OnPlayerDeployed_AI_Ready_For_Attack_Action(eventInfo: any) {
         await mod.Wait(1)
     }
 }
-function OnPlayerDeployed_AI_Ready_For_Attack(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerDeployed_AI_Ready_For_Attack_Condition(eventInfo);
+function aiReadyForAttackRule(conditionState: any, eventInfo: any) {
+    let newState = shouldAIReadyForAttack(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerDeployed_AI_Ready_For_Attack_Action(eventInfo);
+    readyAIForAttack(eventInfo);
 }
 
-function OnPlayerDamaged_AI_Target_Shooter_Condition(eventInfo: any): boolean {
+function shouldAITargetDamager(eventInfo: any): boolean {
     const newState = modlib.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier), mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar))), mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)), mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)));
     return newState;
 }
 
-async function OnPlayerDamaged_AI_Target_Shooter_Action(eventInfo: any) {
+async function targetAIDamager(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar), true)
     mod.AIDefendPositionBehavior(eventInfo.eventPlayer, mod.GetObjectPosition(eventInfo.eventPlayer), 0, 15)
     mod.AISetMoveSpeed(eventInfo.eventPlayer, mod.MoveSpeed.InvestigateRun)
@@ -1532,41 +1532,41 @@ async function OnPlayerDamaged_AI_Target_Shooter_Action(eventInfo: any) {
     await mod.Wait(10)
     if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
         if (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar))) {
-            AI_Scouting(eventInfo.eventPlayer)
+            startAIScouting(eventInfo.eventPlayer)
             mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar), false)
         }
     }
 }
-function OnPlayerDamaged_AI_Target_Shooter(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerDamaged_AI_Target_Shooter_Condition(eventInfo);
+function aiTargetDamagerRule(conditionState: any, eventInfo: any) {
+    let newState = shouldAITargetDamager(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerDamaged_AI_Target_Shooter_Action(eventInfo);
+    targetAIDamager(eventInfo);
 }
 
-function OnPlayerExitVehicle_AI_Exit_Vehicle_Condition(eventInfo: any): boolean {
+function shouldAIExitVehicle(eventInfo: any): boolean {
     const newState = mod.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
     return newState;
 }
 
-function OnPlayerExitVehicle_AI_Exit_Vehicle_Action(eventInfo: any) {
-    AI_Scouting(eventInfo.eventPlayer)
+function exitAIVehicle(eventInfo: any) {
+    startAIScouting(eventInfo.eventPlayer)
 }
-function OnPlayerExitVehicle_AI_Exit_Vehicle(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerExitVehicle_AI_Exit_Vehicle_Condition(eventInfo);
+function aiExitVehicleRule(conditionState: any, eventInfo: any) {
+    let newState = shouldAIExitVehicle(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerExitVehicle_AI_Exit_Vehicle_Action(eventInfo);
+    exitAIVehicle(eventInfo);
 }
 
-function OnPlayerEnterVehicle_AI_Enter_Vehicle_Condition(eventInfo: any): boolean {
+function shouldAIEnterVehicle(eventInfo: any): boolean {
     const newState = mod.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
     return newState;
 }
 
-async function OnPlayerEnterVehicle_AI_Enter_Vehicle_Action(eventInfo: any) {
+async function enterAIVehicle(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, StartPositionPlayerVar), mod.GetObjectPosition(eventInfo.eventPlayer))
     await mod.Wait(10)
     if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
@@ -1581,65 +1581,65 @@ async function OnPlayerEnterVehicle_AI_Enter_Vehicle_Action(eventInfo: any) {
         }
     }
 }
-function OnPlayerEnterVehicle_AI_Enter_Vehicle(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerEnterVehicle_AI_Enter_Vehicle_Condition(eventInfo);
+function aiEnterVehicleRule(conditionState: any, eventInfo: any) {
+    let newState = shouldAIEnterVehicle(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerEnterVehicle_AI_Enter_Vehicle_Action(eventInfo);
+    enterAIVehicle(eventInfo);
 }
 
-function OnAIMoveToFailed_AI_Retry_Move_Condition(eventInfo: any): boolean {
+function shouldAIRetryMove(eventInfo: any): boolean {
     const newState = mod.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
     return newState;
 }
 
-function OnAIMoveToFailed_AI_Retry_Move_Action(eventInfo: any) {
-    AI_Scouting(eventInfo.eventPlayer)
+function retryAIMove(eventInfo: any) {
+    startAIScouting(eventInfo.eventPlayer)
 }
-function OnAIMoveToFailed_AI_Retry_Move(conditionState: any, eventInfo: any) {
-    let newState = OnAIMoveToFailed_AI_Retry_Move_Condition(eventInfo);
+function aiRetryMoveRule(conditionState: any, eventInfo: any) {
+    let newState = shouldAIRetryMove(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnAIMoveToFailed_AI_Retry_Move_Action(eventInfo);
+    retryAIMove(eventInfo);
 }
 
-function OnPlayerEarnedKill_AI_Target_Shooter_Condition(eventInfo: any): boolean {
+function shouldAITargetOnKill(eventInfo: any): boolean {
     const newState = modlib.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier), mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)));
     return newState;
 }
 
-function OnPlayerEarnedKill_AI_Target_Shooter_Action(eventInfo: any) {
-    AI_Scouting(eventInfo.eventPlayer)
+function targetAIOnKill(eventInfo: any) {
+    startAIScouting(eventInfo.eventPlayer)
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar), false)
 }
-function OnPlayerEarnedKill_AI_Target_Shooter(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerEarnedKill_AI_Target_Shooter_Condition(eventInfo);
+function aiTargetOnKillRule(conditionState: any, eventInfo: any) {
+    let newState = shouldAITargetOnKill(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerEarnedKill_AI_Target_Shooter_Action(eventInfo);
+    targetAIOnKill(eventInfo);
 }
 
-function OnPlayerEarnedKillAssist_AI_Target_Shooter_Condition(eventInfo: any): boolean {
+function shouldAITargetOnKillAssist(eventInfo: any): boolean {
     const newState = modlib.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier), mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)), mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)));
     return newState;
 }
 
-function OnPlayerEarnedKillAssist_AI_Target_Shooter_Action(eventInfo: any) {
-    AI_Scouting(eventInfo.eventPlayer)
+function targetAIOnKillAssist(eventInfo: any) {
+    startAIScouting(eventInfo.eventPlayer)
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar), false)
 }
-function OnPlayerEarnedKillAssist_AI_Target_Shooter(conditionState: any, eventInfo: any) {
-    let newState = OnPlayerEarnedKillAssist_AI_Target_Shooter_Condition(eventInfo);
+function aiTargetOnKillAssistRule(conditionState: any, eventInfo: any) {
+    let newState = shouldAITargetOnKillAssist(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    OnPlayerEarnedKillAssist_AI_Target_Shooter_Action(eventInfo);
+    targetAIOnKillAssist(eventInfo);
 }
 
-function Scoreboard() {
+function updateScoreboard() {
 
 
     mod.SetScoreboardType(mod.ScoreboardType.CustomTwoTeams)
@@ -1699,12 +1699,12 @@ function Scoreboard() {
                 mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), StartingScoreTeamVar)))),
             2))), 60, 0))
 }
-function UpdatePlayerScoreboard(Player: any) {
+function updatePlayerScoreboard(Player: any) {
 
 
     mod.SetScoreboardPlayerValues(Player, mod.GetVariable(mod.ObjectVariable(Player, ScorePlayerVar)), mod.GetVariable(mod.ObjectVariable(Player, PlayerKillsPlayerVar)), mod.GetVariable(mod.ObjectVariable(Player, PlayerDeathsPlayerVar)), mod.GetVariable(mod.ObjectVariable(Player, KillAssistsPlayerVar)), mod.GetVariable(mod.ObjectVariable(Player, CapturesPlayerVar)))
 }
-function CapturePointSetup(Objective: any) {
+function setupCapturePoint(Objective: any) {
 
 
     mod.SetCapturePointCapturingTime(Objective, mod.GetVariable(FlagCaptureTimeGlobalVar))
@@ -1712,7 +1712,7 @@ function CapturePointSetup(Objective: any) {
     mod.EnableGameModeObjective(Objective, true)
     mod.SetMaxCaptureMultiplier(Objective, 3)
 }
-function ObjectiveVehicleSpawn(eventInfo: any) {
+function spawnObjectiveVehicles(eventInfo: any) {
 
 
     if (mod.Equals(
@@ -1796,7 +1796,7 @@ function ObjectiveVehicleSpawn(eventInfo: any) {
         }
     }
 }
-function ObjectiveCapturedPlayerData(Player: any) {
+function processObjectivePlayerData(Player: any) {
 
 
     mod.SetVariable(mod.ObjectVariable(Player, CapturesPlayerVar), mod.Add(
@@ -1805,7 +1805,7 @@ function ObjectiveCapturedPlayerData(Player: any) {
     mod.SetVariable(mod.ObjectVariable(Player, ScorePlayerVar), mod.Add(
         mod.GetVariable(mod.ObjectVariable(Player, ScorePlayerVar)),
         50))
-    UpdatePlayerScoreboard(Player)
+    updatePlayerScoreboard(Player)
     mod.PlaySound(mod.GetVariable(CapturedSoundGlobalVar), 0.7, Player)
 }
 function AppendToArray(Value: string) {
@@ -1813,7 +1813,7 @@ function AppendToArray(Value: string) {
 
     mod.SetVariable(AppendGlobalVar, mod.AppendToArray(mod.GetVariable(AppendGlobalVar), Value))
 }
-function UniquePlayerUI1() {
+function initPlayerUIIds() {
 
 
     mod.SetVariable(ID_PoolGlobalVar, mod.EmptyArray())
@@ -1924,7 +1924,7 @@ function UniquePlayerUI1() {
     AppendToArray("105")
     mod.SetVariable(ID_PoolGlobalVar, mod.GetVariable(AppendGlobalVar))
 }
-function ObjectiveUI(Label: string, eventInfo: any) {
+function updateObjectiveUI(Label: string, eventInfo: any) {
 
 
     mod.SetUITextLabel(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.Message(Label))
@@ -1941,7 +1941,7 @@ function ObjectiveUI(Label: string, eventInfo: any) {
         mod.SetUITextColor(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.GetVariable(EnemyTextColourGlobalVar))
     }
 }
-function MainUI_ScoreandTime() {
+function setupMainUI() {
 
 
     mod.AddUIContainer("container", mod.CreateVector(0, 0, 0), mod.CreateVector(2000, 2000, 0), mod.UIAnchor.TopCenter)
@@ -1958,8 +1958,8 @@ function MainUI_ScoreandTime() {
                 10))), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
     mod.AddUIText("LeftBarBG", mod.CreateVector(-160, 60, 0), mod.CreateVector(200, 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
     mod.AddUIText("RightBarBG", mod.CreateVector(160, 60, 0), mod.CreateVector(200, 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
-    UI_ScoreSetup("Team1ScoreLeft", "Team1ScoreRight", "Team1LeftBar", "Team1RightBar", mod.GetTeam(1))
-    UI_ScoreSetup("Team2ScoreLeft", "Team2ScoreRight", "Team2LeftBar", "Team2RightBar", mod.GetTeam(2))
+    setupScoreUI("Team1ScoreLeft", "Team1ScoreRight", "Team1LeftBar", "Team1RightBar", mod.GetTeam(1))
+    setupScoreUI("Team2ScoreLeft", "Team2ScoreRight", "Team2LeftBar", "Team2RightBar", mod.GetTeam(2))
     for (let iteratorVar = 0; iteratorVar < mod.CountOf(mod.AllCapturePoints()); iteratorVar += 1) {
         mod.SetVariable(iteratorGlobalVar, iteratorVar);
         mod.AddUIText(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.GetVariable(iteratorGlobalVar)), mod.CreateVector(mod.Multiply(mod.Subtract(
@@ -2002,14 +2002,14 @@ function MainUI_ScoreandTime() {
     mod.AddUIText("LeftFlash2", mod.GetVariable(ScorePositionLeftGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyTextColourGlobalVar), 0, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
     mod.AddUIText("RightFlash2", mod.GetVariable(ScorePositionRightGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyTextColourGlobalVar), 0, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
 }
-function EndGame_UI(UI: string, Position: any) {
+function showEndGameUI(UI: string, Position: any) {
 
 
     mod.SetUIWidgetSize(mod.FindUIWidgetWithName(UI), mod.CreateVector(160, 70, 0))
     mod.SetUITextSize(mod.FindUIWidgetWithName(UI), 64)
     mod.SetUIWidgetPosition(mod.FindUIWidgetWithName(UI), Position)
 }
-function UI_ScoreSetup(LeftScore: string, RightScore: string, LeftBar: string, RightBar: string, Team: any) {
+function setupScoreUI(LeftScore: string, RightScore: string, LeftBar: string, RightBar: string, Team: any) {
 
 
     mod.AddUIText(LeftScore, mod.GetVariable(ScorePositionLeftGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("{}", mod.GetVariable(mod.ObjectVariable(Team, TeamScoreTeamVar))), 32, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
@@ -2033,7 +2033,7 @@ function UI_ScoreSetup(LeftScore: string, RightScore: string, LeftBar: string, R
                 mod.GetVariable(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(Team, OtherTeamTeamVar)), TeamScoreTeamVar)),
                 mod.GetVariable(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(Team, OtherTeamTeamVar)), StartingScoreTeamVar)))), 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
 }
-function ObjectiveLetters() {
+function initObjectiveLetters() {
 
 
     mod.SetVariable(FlagLettersGlobalVar, mod.EmptyArray())
@@ -2066,7 +2066,7 @@ function ObjectiveLetters() {
     AppendToArray("Z")
     mod.SetVariable(FlagLettersGlobalVar, mod.GetVariable(AppendGlobalVar))
 }
-function ObjectiveTeamUI_Array() {
+function initObjectiveTeamUI() {
 
 
     mod.SetVariable(ObjectiveTrackingUIGlobalVar, mod.EmptyArray())
@@ -2177,7 +2177,7 @@ function ObjectiveTeamUI_Array() {
     AppendToArray("Z4")
     mod.SetVariable(ObjectiveTrackingUIGlobalVar, mod.GetVariable(AppendGlobalVar))
 }
-function Add_AI() {
+function addAI() {
 
 
     if (mod.GetVariable(EnableCustomAIGlobalVar)) {
@@ -2211,7 +2211,7 @@ function Add_AI() {
         }
     }
 }
-function AddBotNames() {
+function initBotNames() {
 
 
     mod.SetVariable(BotNamesGlobalVar, mod.EmptyArray())
@@ -2285,7 +2285,7 @@ function AddBotNames() {
     AppendToArray("LoganTheBrawler (Bot)")
     mod.SetVariable(BotNamesGlobalVar, mod.GetVariable(AppendGlobalVar))
 }
-function AI_ObjectiveSpawn(eventInfo: any) {
+function spawnAIObjectives(eventInfo: any) {
 
 
     if (mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle))) {
@@ -2310,7 +2310,7 @@ function AI_ObjectiveSpawn(eventInfo: any) {
                     mod.GetTeam(2),
                     mod.GetTeam(eventInfo.eventPlayer)))) {
                 mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.RandomValueInArray(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar)))), 1)
-                AI_DeployVehicle(mod.RandomValueInArray(modlib.FilteredArray(
+                deployAIVehicle(mod.RandomValueInArray(modlib.FilteredArray(
                     mod.AllVehicles(),
                     (currentArrayElement: any) => mod.LessThan(
                         mod.CountOf(mod.GetAllPlayersInVehicle(currentArrayElement)),
@@ -2320,7 +2320,7 @@ function AI_ObjectiveSpawn(eventInfo: any) {
                 mod.RoundToInteger(mod.RandomReal(0, 5)),
                 5)) {
                 mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.RandomValueInArray(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar)))), 1)
-                AI_DeployVehicle(mod.RandomValueInArray(modlib.FilteredArray(
+                deployAIVehicle(mod.RandomValueInArray(modlib.FilteredArray(
                     mod.AllVehicles(),
                     (currentArrayElement: any) => mod.LessThan(
                         mod.CountOf(mod.GetAllPlayersInVehicle(currentArrayElement)),
@@ -2337,7 +2337,7 @@ function AI_ObjectiveSpawn(eventInfo: any) {
         }
     }
 }
-function FlagCalls() {
+function initFlagCalls() {
 
 
     mod.SetVariable(FlagAnnounceGlobalVar, mod.EmptyArray())
@@ -2351,7 +2351,7 @@ function FlagCalls() {
     mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.Hotel))
     mod.SetVariable(FlagAnnounceGlobalVar, mod.AppendToArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.VoiceOverFlags.India))
 }
-async function UIFlashAnimation(Team1UI: string, Team2UI: string) {
+async function animateUIFlash(Team1UI: string, Team2UI: string) {
 
 
     mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(Team1UI), 1)
@@ -2373,7 +2373,7 @@ async function UIFlashAnimation(Team1UI: string, Team2UI: string) {
     mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(Team1UI), 0)
     mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(Team2UI), 0)
 }
-async function OutOfBounds(eventInfo: any) {
+async function handleOutOfBounds(eventInfo: any) {
 
     const newState = modlib.And(mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, IgnoreOOBPlayerVar))), mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar))), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive));
     return newState;
@@ -2395,7 +2395,7 @@ async function OutOfBounds(eventInfo: any) {
         }
         mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), -1)
     } else {
-        PlayerOOBToggleIUI(true, eventInfo)
+        togglePlayerOOBUI(true, eventInfo)
         for (let CaptureTickVar = 10; CaptureTickVar < 0; CaptureTickVar += -1) {
             mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), CaptureTickVar);
             mod.SetUITextLabel(mod.FindUIWidgetWithName("OOBCounter", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.Message("{}", mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar))))
@@ -2408,11 +2408,11 @@ async function OutOfBounds(eventInfo: any) {
         if (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar))) {
             mod.DealDamage(eventInfo.eventPlayer, 10000, eventInfo.eventPlayer)
         }
-        PlayerOOBToggleIUI(false, eventInfo)
+        togglePlayerOOBUI(false, eventInfo)
         mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), -1)
     }
 }
-function DisableOutOfBounds(eventInfo: any) {
+function disableOutOfBounds(eventInfo: any) {
 
     const newState = mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar));
     return newState;
@@ -2420,7 +2420,7 @@ function DisableOutOfBounds(eventInfo: any) {
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar), false)
     mod.SkipManDown(eventInfo.eventPlayer, false)
 }
-function AI_DeployVehicle(Vehicle: any, Distance: number, eventInfo: any) {
+function deployAIVehicle(Vehicle: any, Distance: number, eventInfo: any) {
 
     const newState = mod.And(mod.IsPlayerValid(eventInfo.eventPlayer), mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)));
     return newState;
@@ -2434,7 +2434,7 @@ function AI_DeployVehicle(Vehicle: any, Distance: number, eventInfo: any) {
         mod.ForcePlayerToSeat(eventInfo.eventPlayer, Vehicle, -1)
     }
 }
-function AI_Scouting(Player: any) {
+function startAIScouting(Player: any) {
 
     const newState = modlib.And(mod.IsPlayerValid(Player), mod.GetSoldierState(Player, mod.SoldierStateBool.IsAlive), mod.Not(mod.GetSoldierState(Player, mod.SoldierStateBool.IsInVehicle)));
     return newState;
@@ -2466,7 +2466,7 @@ function AI_Scouting(Player: any) {
         mod.AISetMoveSpeed(Player, mod.MoveSpeed.InvestigateRun)
     }
 }
-function FlagIconsUpdate() {
+function updateFlagIcons() {
 
 
     for (let iteratorVar = 0; iteratorVar < mod.CountOf(mod.AllCapturePoints()); iteratorVar += 1) {
@@ -2527,12 +2527,12 @@ function FlagIconsUpdate() {
         }
     }
 }
-function Version() {
+function showVersion() {
 
 
     mod.AddUIText("ver", mod.CreateVector(10, 2, 0), mod.CreateVector(300, 30, 0), mod.UIAnchor.BottomLeft, mod.GetUIRoot(), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.None, mod.Message("ViperStudiosAndy | andy6170 | Conquest Template V10"), 12, mod.CreateVector(1, 1, 1), 0.3, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
 }
-function PlayerCapturepointUI(eventInfo: any) {
+function updatePlayerCaptureUI(eventInfo: any) {
 
 
     mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.ValueInArray(mod.GetVariable(CaptureProgressPositionGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)))
@@ -2547,7 +2547,7 @@ function PlayerCapturepointUI(eventInfo: any) {
     } else {
         mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.GetVariable(EnemyTextColourGlobalVar))
     }
-    ObjectiveUI(mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), Cap_MessageTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint)), eventInfo)
+    updateObjectiveUI(mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), Cap_MessageTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint)), eventInfo)
     if (mod.NotEqualTo(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar)), mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
         mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), mod.Add(
             mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar)),
@@ -2581,7 +2581,7 @@ function PlayerCapturepointUI(eventInfo: any) {
         mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), 0)
     }
 }
-function PlayerCapturepointUIToggle(Enable: boolean, eventInfo: any) {
+function togglePlayerCaptureUI(Enable: boolean, eventInfo: any) {
 
 
     mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
@@ -2589,7 +2589,7 @@ function PlayerCapturepointUIToggle(Enable: boolean, eventInfo: any) {
     mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
     mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjProgressBG", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
 }
-function PlayerUISetup(eventInfo: any) {
+function setupPlayerUI(eventInfo: any) {
 
 
     mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar), mod.ValueInArray(mod.GetVariable(ID_PoolGlobalVar), 0))
@@ -2611,7 +2611,7 @@ function PlayerUISetup(eventInfo: any) {
     mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), mod.UIBgFill.None)
     mod.SetUIWidgetDepth(mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), mod.UIDepth.AboveGameUI)
     if (mod.LessThanEqualTo(mod.CountOf(mod.GetVariable(ID_PoolGlobalVar)), 1)) {
-        UniquePlayerUI1()
+        initPlayerUIIds()
         for (let iterator4Var = 0; iterator4Var < mod.CountOf(mod.AllPlayers()); iterator4Var += 1) {
             mod.SetVariable(iterator4GlobalVar, iterator4Var);
             mod.SetVariable(ID_PoolGlobalVar, modlib.FilteredArray(
@@ -2627,7 +2627,7 @@ function PlayerUISetup(eventInfo: any) {
     mod.AddUIText("OOBText", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), false, 1, mod.GetVariable(EnemyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("Return To Combat"), 56, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.TopCenter, eventInfo.eventPlayer)
     mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar))), 72, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.BottomCenter, eventInfo.eventPlayer)
 }
-function CapturePointUI_Manager(Flag: any, OldProggress: number, eventInfo: any) {
+function manageCapturePointUI(Flag: any, OldProggress: number, eventInfo: any) {
 
 
     if (mod.Equals(
@@ -2698,7 +2698,7 @@ function CapturePointUI_Manager(Flag: any, OldProggress: number, eventInfo: any)
         }
     }
 }
-async function RepelLogic(Time: number, eventInfo: any) {
+async function applyRepelForce(Time: number, eventInfo: any) {
 
 
     if (mod.GreaterThan(
@@ -2731,13 +2731,13 @@ async function RepelLogic(Time: number, eventInfo: any) {
         mod.GetObjId(eventInfo.eventInteractPoint),
         50))), mod.YComponentOf(mod.GetObjectRotation(eventInfo.eventPlayer)))
 }
-async function FX_Reset(eventInfo: any) {
+async function resetFX(eventInfo: any) {
 
 
-    while (mod.GetVariable(FX_ResetingGlobalVar)) {
+    while (mod.GetVariable(resetFXingGlobalVar)) {
         await mod.Wait(1)
     }
-    mod.SetVariable(FX_ResetingGlobalVar, true)
+    mod.SetVariable(resetFXingGlobalVar, true)
     for (let iteratorVar = 2000; iteratorVar < 2999; iteratorVar += 1) {
         mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, iteratorPlayerVar), iteratorVar);
         mod.EnableVFX(mod.GetVFX(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, iteratorPlayerVar))), false)
@@ -2750,17 +2750,17 @@ async function FX_Reset(eventInfo: any) {
             await mod.Wait(0.066)
         }
     }
-    mod.SetVariable(FX_ResetingGlobalVar, false)
+    mod.SetVariable(resetFXingGlobalVar, false)
 }
-async function AI_Deploy(eventInfo: any) {
+async function deployAI(eventInfo: any) {
 
 
-    AI_ObjectiveSpawn(eventInfo)
+    spawnAIObjectives(eventInfo)
     await mod.Wait(0.2)
     if (mod.Equals(
         mod.RoundToInteger(mod.RandomReal(0, 1)),
         0)) {
-        AI_DeployVehicle(mod.RandomValueInArray(modlib.FilteredArray(
+        deployAIVehicle(mod.RandomValueInArray(modlib.FilteredArray(
             mod.AllVehicles(),
             (currentArrayElement: any) => mod.And(
                 mod.LessThan(
@@ -2773,9 +2773,9 @@ async function AI_Deploy(eventInfo: any) {
                     150)))), 150, eventInfo)
     }
     await mod.Wait(0.2)
-    AI_Scouting(eventInfo.eventPlayer)
+    startAIScouting(eventInfo.eventPlayer)
 }
-function ConquestAssaultWinCheck() {
+function checkConquestAssaultWin() {
 
     const newState = modlib.And(mod.GetVariable(ConquestAssaultGlobalVar), mod.GreaterThan(
         mod.GetMatchTimeElapsed(),
@@ -2794,7 +2794,7 @@ function ConquestAssaultWinCheck() {
 
     mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), 0)
 }
-function PlayerOOBToggleIUI(Enable: boolean, eventInfo: any) {
+function togglePlayerOOBUI(Enable: boolean, eventInfo: any) {
 
 
     mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBBackground", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
@@ -2819,7 +2819,7 @@ const AppendGlobalVar = mod.GlobalVariable(13)
 const nameIndexGlobalVar = mod.GlobalVariable(14)
 const UniqueUI_ID_UsedGlobalVar = mod.GlobalVariable(15)
 const iterator3GlobalVar = mod.GlobalVariable(16)
-const FX_ResetingGlobalVar = mod.GlobalVariable(17)
+const resetFXingGlobalVar = mod.GlobalVariable(17)
 const CaptureProgressPositionGlobalVar = mod.GlobalVariable(18)
 const VO6GlobalVar = mod.GlobalVariable(19)
 const TickSoundLosingGlobalVar = mod.GlobalVariable(20)
@@ -2902,162 +2902,162 @@ export function OngoingGlobal() {
     ensureStateInitialized();
     const eventInfo = {};
     let eventNum = 0;
-    OngoingGlobal_Initialise(modlib.getGlobalCondition(eventNum++));
-    OngoingGlobal_Update_Score_and_Time(modlib.getGlobalCondition(eventNum++));
-    OngoingGlobal_Update_Score_and_Time1(modlib.getGlobalCondition(eventNum++));
-    OngoingGlobal_Score_tracker(modlib.getGlobalCondition(eventNum++));
-    OngoingGlobal_Near_End_Music_Trigger(modlib.getGlobalCondition(eventNum++));
-    OngoingGlobal_End_Game(modlib.getGlobalCondition(eventNum++));
-    OngoingGlobal_VO_Low_Time(modlib.getGlobalCondition(eventNum++));
-    OngoingGlobal_VO_Winning(modlib.getGlobalCondition(eventNum++));
-    OngoingGlobal_VO_Winning1(modlib.getGlobalCondition(eventNum++));
-    OngoingGlobal_VO_Low_Tickets(modlib.getGlobalCondition(eventNum++));
-    OngoingGlobal_VO_Low_Tickets1(modlib.getGlobalCondition(eventNum++));
+    initGameSettingsRule(modlib.getGlobalCondition(eventNum++));
+    updateScoreTimeRule(modlib.getGlobalCondition(eventNum++));
+    updateScoreTimeSecondaryTickRule(modlib.getGlobalCondition(eventNum++));
+    trackScoreRule(modlib.getGlobalCondition(eventNum++));
+    playNearEndMusicRule(modlib.getGlobalCondition(eventNum++));
+    endGameRule(modlib.getGlobalCondition(eventNum++));
+    playVOLowTimeRule(modlib.getGlobalCondition(eventNum++));
+    playVOWinningRule(modlib.getGlobalCondition(eventNum++));
+    playVOTeam2WinningRule(modlib.getGlobalCondition(eventNum++));
+    playVOLowTicketsRule(modlib.getGlobalCondition(eventNum++));
+    playVOTeam2LowTicketsRule(modlib.getGlobalCondition(eventNum++));
 }
 
 export function OnGameModeStarted() {
     ensureStateInitialized();
     const eventInfo = {};
     let eventNum = 11;
-    OnGameModeStarted_MapSetup(modlib.getGlobalCondition(eventNum++));
+    setupMapRule(modlib.getGlobalCondition(eventNum++));
 }
 
 export function OnPlayerEarnedKill(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDeathType: mod.DeathType, eventWeaponUnlock: mod.WeaponUnlock) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDeathType, eventWeaponUnlock };
     let eventNum = 0;
-    OnPlayerEarnedKill_Ean_Kill(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    OnPlayerEarnedKill_AI_Target_Shooter(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    processKillRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiTargetOnKillRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerEarnedKillAssist(eventPlayer: mod.Player, eventOtherPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer };
     let eventNum = 2;
-    OnPlayerEarnedKillAssist_Kill_assist(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    OnPlayerEarnedKillAssist_AI_Target_Shooter(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    processAssistRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiTargetOnKillAssistRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnRevived(eventPlayer: mod.Player, eventOtherPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer };
     let eventNum = 4;
-    OnRevived_Revive_Counter(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    OnRevived_Update_Player_Count_When_Revived(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    processReviveRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    updatePlayerCountOnReviveRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerDied(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDeathType: mod.DeathType, eventWeaponUnlock: mod.WeaponUnlock) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDeathType, eventWeaponUnlock };
     let eventNum = 6;
-    OnPlayerDied_CustomAI_Score_Tracking(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    OnPlayerDied_Update_Player_Count_On_Death(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    handlePlayerDeathRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    updatePlayerCountOnDeathRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerDeployed(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 8;
-    OnPlayerDeployed_Add_Equipment(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    OnPlayerDeployed_AI_Scout(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    OnPlayerDeployed_AI_Ready_For_Attack(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    addEquipmentRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiScoutOnDeployRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiReadyForAttackRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerJoinGame(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 11;
-    OnPlayerJoinGame_Sets_Scoreboard(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    handlePlayerJoinRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerUndeploy(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 12;
-    OnPlayerUndeploy_Death_Update(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    updateDeathOnUndeployRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnCapturePointCaptured(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint };
     let eventNum = 0;
-    OnCapturePointCaptured_On_Capture(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
+    handleCapturePointCapturedRule(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
 }
 
 export function OnCapturePointCapturing(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint };
     let eventNum = 1;
-    OnCapturePointCapturing_Notify_Capture(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
+    notifyCaptureRule(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
 }
 
 export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventCapturePoint };
     let eventNum = 13;
-    OnPlayerEnterCapturePoint_CapturePoint_UI(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    OnPlayerEnterCapturePoint_AI_Find_New_Objective(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    showCaptureUIRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiFindNewObjectiveRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerExitCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventCapturePoint };
     let eventNum = 15;
-    OnPlayerExitCapturePoint_Remove_CapturePoint_UI(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    hideCaptureUIRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerInteract(eventPlayer: mod.Player, eventInteractPoint: mod.InteractPoint) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventInteractPoint };
     let eventNum = 16;
-    OnPlayerInteract_Team_Switcher_and_Repel_Logic(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    handleTeamSwitchAndRepelRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerEnterAreaTrigger(eventPlayer: mod.Player, eventAreaTrigger: mod.AreaTrigger) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventAreaTrigger };
     let eventNum = 17;
-    OnPlayerEnterAreaTrigger_EnterArea(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    enterAreaTriggerRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerExitAreaTrigger(eventPlayer: mod.Player, eventAreaTrigger: mod.AreaTrigger) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventAreaTrigger };
     let eventNum = 18;
-    OnPlayerExitAreaTrigger_Exit_Area(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    exitAreaTriggerRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OngoingCapturePoint(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint: eventCapturePoint };
     let eventNum = 2;
-    OngoingCapturePoint_Capture_Times(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
+    runCaptureProgressRule(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
 }
 
 export function OnPlayerDamaged(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDamageType: mod.DamageType, eventWeaponUnlock: mod.WeaponUnlock) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDamageType, eventWeaponUnlock };
     let eventNum = 19;
-    OnPlayerDamaged_AI_Target_Shooter(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiTargetDamagerRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerExitVehicle(eventPlayer: mod.Player, eventVehicle: mod.Vehicle) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventVehicle };
     let eventNum = 20;
-    OnPlayerExitVehicle_AI_Exit_Vehicle(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiExitVehicleRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerEnterVehicle(eventPlayer: mod.Player, eventVehicle: mod.Vehicle) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventVehicle };
     let eventNum = 21;
-    OnPlayerEnterVehicle_AI_Enter_Vehicle(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiEnterVehicleRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnAIMoveToFailed(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 22;
-    OnAIMoveToFailed_AI_Retry_Move(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiRetryMoveRule(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
