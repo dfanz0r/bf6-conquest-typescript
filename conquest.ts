@@ -1,6 +1,349 @@
 
 import * as modlib from 'modlib';
 
+// ============================================================
+// STATE FOUNDATION (Phase 1)
+// ============================================================
+
+// --- 1a. Config and Flags ---
+
+const CONFIG = {
+    TIME_LIMIT: 2700,
+    STARTING_SCORE: 1500,
+    CONQUEST_ASSAULT_TEAM_1_SCORE: 2000,
+    CONQUEST_ASSAULT_TEAM_2_SCORE: 1500,
+    FLAG_CAPTURE_TIME: 15,
+    FLAG_NEUTRAL_TIME: 20,
+    TICKET_BLEED_SPEED: 2,
+    TOTAL_CONTROL_BONUS: 10,
+    LOW_TICKET_MUSIC_THRESHOLD: 100,
+    MAX_CUSTOM_AI: 36,
+} as const;
+
+const FLAGS = {
+    ENABLE_CUSTOM_AI: true,
+    ENABLE_TEAM_SWITCHING: true,
+    LOSER_ONLY_TICKET_BLEED: true,
+    TOTAL_CONTROL_TICKET_BLEED: true,
+    PLAYER_DEATHS_BLEED: true,
+    ENABLE_VO: true,
+    ENABLE_SNOW: false,
+    GIVE_PLAYERS_NVG: false,
+    CONQUEST_ASSAULT: false,
+    BF3_COLOUR_FILTER: false,
+    BF4_COLOUR_FILTER: false,
+    SNOW_COLOUR_FILTER: false,
+} as const;
+
+// --- 1b. Runtime Globals ---
+
+let isGameOngoing = false;
+let isFXResetting = false;
+let capturePointFlash = 0;
+let botNameIndex = 0;
+
+let scorePositionLeft: mod.Vector;
+let scorePositionRight: mod.Vector;
+let friendlyTextColour: mod.Vector;
+let friendlyBGColour: mod.Vector;
+let enemyTextColour: mod.Vector;
+let enemyBGColour: mod.Vector;
+
+// --- 1c. Spawned Object References ---
+
+const audio = {
+    vo1: null as mod.SpatialObject | null,
+    vo2: null as mod.SpatialObject | null,
+    vo3: null as mod.SpatialObject | null,
+    vo4: null as mod.SpatialObject | null,
+    vo5: null as mod.SpatialObject | null,
+    vo6: null as mod.SpatialObject | null,
+    tickSoundTaking: null as mod.SpatialObject | null,
+    tickSoundLosing: null as mod.SpatialObject | null,
+    capturedSound: null as mod.SpatialObject | null,
+    oobSound: null as mod.SpatialObject | null,
+};
+
+let snowVolume: mod.SpatialObject | null = null;
+
+// --- 1d. Static Native Arrays ---
+
+const flagAnnounce: mod.VoiceOverFlags[] = [];
+const flagLetters: string[] = [];
+const botNames: string[] = [];
+const uiIdPool: string[] = [];
+const activeUiIds = new Set<string>();
+const objectiveTrackingUI: string[] = [];
+
+// --- 1e. Player State ---
+
+class PlayerState {
+    constructor(public player: mod.Player) {}
+
+    uniqueUiId = "";
+    score = 0;
+    kills = 0;
+    deaths = 0;
+    assists = 0;
+    captures = 0;
+    revives = 0;
+
+    currentCapturePoint: mod.CapturePoint | null = null;
+    capturePointState = 0;
+    flagOwner: mod.Team | null = null;
+    captureTick = -1;
+    isOnPoint = false;
+
+    isOutOfBounds = false;
+    ignoreOOB = false;
+
+    aiTarget: mod.Player | mod.CapturePoint | null = null;
+    aiInAction = false;
+    aiSpawnPoints: mod.CapturePoint[] = [];
+    startPosition: mod.Vector | null = null;
+}
+
+// --- 1f. Team State ---
+
+class TeamState {
+    faction: "NATO" | "PAX" = "NATO";
+    score = 0;
+    startingScore = 0;
+
+    playersOnPoints = new Map<number, number>();
+    capTextColours = new Map<number, mod.Vector>();
+    capBGColours = new Map<number, mod.Vector>();
+    capMessages = new Map<number, string>();
+    capProgressColours = new Map<number, mod.Vector>();
+
+    constructor(
+        public team: mod.Team,
+        public otherTeam: mod.Team,
+    ) {}
+
+    playersOnPoint(cpId: number): number {
+        return this.playersOnPoints.get(cpId) ?? 0;
+    }
+
+    capTextColour(cpId: number): mod.Vector {
+        return this.capTextColours.get(cpId) ?? mod.CreateVector(1, 1, 1);
+    }
+
+    capBGColour(cpId: number): mod.Vector {
+        return this.capBGColours.get(cpId) ?? mod.CreateVector(0, 0, 0);
+    }
+
+    capMessage(cpId: number): string {
+        return this.capMessages.get(cpId) ?? "";
+    }
+
+    capProgressColour(cpId: number): mod.Vector {
+        return this.capProgressColours.get(cpId) ?? mod.CreateVector(0, 0, 0);
+    }
+}
+
+// --- 1g. Capture Point State ---
+
+class CapturePointState {
+    id: number;
+    progress = 0;
+    uiSize: mod.Vector;
+    uiPosition: mod.Vector;
+
+    constructor(public capturePoint: mod.CapturePoint) {
+        this.id = mod.GetObjId(capturePoint);
+        this.uiSize = mod.CreateVector(0, 7, 0);
+        this.uiPosition = mod.CreateVector(-110, 200, 0);
+    }
+
+    setProgressVisuals(progress: number): void {
+        const width = mod.Floor(mod.Multiply(220, progress));
+        this.uiSize = mod.CreateVector(width, 7, 0);
+        this.uiPosition = mod.CreateVector(
+            mod.Add(-110, mod.Floor(mod.Divide(width, 2))),
+            200,
+            0,
+        );
+    }
+}
+
+// --- 1h. Registries and Accessors ---
+
+const playerStates = new Map<number, PlayerState>();
+const teamStates = new Map<number, TeamState>();
+const capturePointStates = new Map<number, CapturePointState>();
+
+function getPlayerState(player: mod.Player): PlayerState {
+    const id = mod.GetObjId(player);
+    playerById.set(id, player);
+
+    let state = playerStates.get(id);
+    if (!state) {
+        state = new PlayerState(player);
+        playerStates.set(id, state);
+    } else {
+        // Handles can be fresh/opaque. Keep latest handle.
+        state.player = player;
+    }
+    return state;
+}
+
+function getTeamState(team: mod.Team): TeamState {
+    const state = tryGetTeamState(team);
+    if (state) return state;
+
+    // Neutral/non-gameplay teams should not have TeamState. Fix call sites to use
+    // isNeutralTeam()/sameTeam() checks instead of asking for score state.
+    mod.SendErrorReport(mod.Message("Missing gameplay TeamState for team {}", mod.GetObjId(team)));
+    return teamStates.get(mod.GetObjId(TEAM_1))!;
+}
+
+function tryGetTeamState(team: mod.Team): TeamState | null {
+    ensureStateInitialized();
+    return teamStates.get(mod.GetObjId(team)) ?? null;
+}
+
+function sameTeam(a: mod.Team, b: mod.Team): boolean {
+    return mod.GetObjId(a) === mod.GetObjId(b);
+}
+
+function isNeutralTeam(team: mod.Team): boolean {
+    ensureStateInitialized();
+    return sameTeam(team, TEAM_NEUTRAL);
+}
+
+function getCapturePointState(cp: mod.CapturePoint): CapturePointState {
+    const id = mod.GetObjId(cp);
+    capturePointById.set(id, cp);
+
+    let state = capturePointStates.get(id);
+    if (!state) {
+        state = new CapturePointState(cp);
+        capturePointStates.set(id, state);
+    } else {
+        state.capturePoint = cp;
+    }
+    return state;
+}
+
+// --- 1i. Cached Handles ---
+
+let stateInitialized = false;
+let stateInitializing = false;
+
+let TEAM_NEUTRAL: mod.Team;
+let TEAM_1: mod.Team;
+let TEAM_2: mod.Team;
+
+const teamById = new Map<number, mod.Team>();
+const capturePointById = new Map<number, mod.CapturePoint>();
+const playerById = new Map<number, mod.Player>();
+
+function ensureStateInitialized(): void {
+    if (stateInitialized || stateInitializing) return;
+    stateInitializing = true;
+
+    try {
+        TEAM_NEUTRAL = mod.GetTeam(0);
+        TEAM_1 = mod.GetTeam(1);
+        TEAM_2 = mod.GetTeam(2);
+
+        teamById.set(mod.GetObjId(TEAM_NEUTRAL), TEAM_NEUTRAL);
+        teamById.set(mod.GetObjId(TEAM_1), TEAM_1);
+        teamById.set(mod.GetObjId(TEAM_2), TEAM_2);
+
+        const allCPs = mod.AllCapturePoints();
+        for (let i = 0; i < mod.CountOf(allCPs); i++) {
+            const cp = mod.ValueInArray(allCPs, i) as mod.CapturePoint;
+            getCapturePointState(cp);
+        }
+
+        initRuntimeValues();
+        initTeams();
+        initStaticArrays();
+
+        stateInitialized = true;
+    } finally {
+        stateInitializing = false;
+    }
+}
+
+// --- 1j. Initialization Functions ---
+
+function initRuntimeValues(): void {
+    isGameOngoing = false;
+    isFXResetting = false;
+    capturePointFlash = 0;
+    botNameIndex = 0;
+
+    scorePositionLeft = mod.CreateVector(-315, 45, 0);
+    scorePositionRight = mod.CreateVector(315, 45, 0);
+    friendlyTextColour = mod.CreateVector(0, 0.8, 1);
+    friendlyBGColour = mod.CreateVector(0, 0.2, 0.5);
+    enemyTextColour = mod.CreateVector(1, 0.2, 0.2);
+    enemyBGColour = mod.CreateVector(0.6, 0.1, 0.1);
+}
+
+function initTeams(): void {
+    const team1 = new TeamState(TEAM_1, TEAM_2);
+    const team2 = new TeamState(TEAM_2, TEAM_1);
+
+    if (FLAGS.CONQUEST_ASSAULT) {
+        team1.startingScore = CONFIG.CONQUEST_ASSAULT_TEAM_1_SCORE;
+        team2.startingScore = CONFIG.CONQUEST_ASSAULT_TEAM_2_SCORE;
+    } else {
+        team1.startingScore = CONFIG.STARTING_SCORE;
+        team2.startingScore = CONFIG.STARTING_SCORE;
+    }
+
+    team1.score = team1.startingScore;
+    team2.score = team2.startingScore;
+
+    teamStates.set(mod.GetObjId(TEAM_1), team1);
+    teamStates.set(mod.GetObjId(TEAM_2), team2);
+}
+
+function initStaticArrays(): void {
+    flagAnnounce.length = 0;
+    flagLetters.length = 0;
+    botNames.length = 0;
+    objectiveTrackingUI.length = 0;
+    uiIdPool.length = 0;
+    activeUiIds.clear();
+
+    // Fill these by migrating the existing UniquePlayerUI1(), ObjectiveLetters(),
+    // ObjectiveTeamUI_Array(), AddBotNames(), and FlagCalls() data.
+}
+
+function initPlayerState(player: mod.Player): PlayerState {
+    const state = getPlayerState(player);
+    playerById.set(mod.GetObjId(player), player);
+
+    state.captureTick = -1;
+    state.isOnPoint = false;
+    state.isOutOfBounds = false;
+    state.ignoreOOB = false;
+    state.aiInAction = false;
+
+    return state;
+}
+
+function removePlayerStateById(playerId: number): void {
+    const state = playerStates.get(playerId);
+    if (state) {
+        // TODO: releasePlayerUiId(state) when UI ID pool is migrated in Phase 7
+        playerStates.delete(playerId);
+    }
+    playerById.delete(playerId);
+}
+
+// acquireUiId / releasePlayerUiId / rebuildUiIdPool
+// will be added when UI ID pool is migrated in Phase 7.
+
+// ============================================================
+// END STATE FOUNDATION
+// ============================================================
+
 function OngoingGlobal_Initialise_Action() {
     mod.SetVariable(GameOngoingGlobalVar, false)
     mod.SetVariable(EnableCustomAIGlobalVar, true)
@@ -2556,6 +2899,7 @@ const StartingScoreTeamVar = 8;
 // vehicle vars
 
 export function OngoingGlobal() {
+    ensureStateInitialized();
     const eventInfo = {};
     let eventNum = 0;
     OngoingGlobal_Initialise(modlib.getGlobalCondition(eventNum++));
@@ -2572,12 +2916,14 @@ export function OngoingGlobal() {
 }
 
 export function OnGameModeStarted() {
+    ensureStateInitialized();
     const eventInfo = {};
     let eventNum = 11;
     OnGameModeStarted_MapSetup(modlib.getGlobalCondition(eventNum++));
 }
 
 export function OnPlayerEarnedKill(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDeathType: mod.DeathType, eventWeaponUnlock: mod.WeaponUnlock) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDeathType, eventWeaponUnlock };
     let eventNum = 0;
     OnPlayerEarnedKill_Ean_Kill(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
@@ -2585,6 +2931,7 @@ export function OnPlayerEarnedKill(eventPlayer: mod.Player, eventOtherPlayer: mo
 }
 
 export function OnPlayerEarnedKillAssist(eventPlayer: mod.Player, eventOtherPlayer: mod.Player) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer };
     let eventNum = 2;
     OnPlayerEarnedKillAssist_Kill_assist(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
@@ -2592,6 +2939,7 @@ export function OnPlayerEarnedKillAssist(eventPlayer: mod.Player, eventOtherPlay
 }
 
 export function OnRevived(eventPlayer: mod.Player, eventOtherPlayer: mod.Player) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer };
     let eventNum = 4;
     OnRevived_Revive_Counter(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
@@ -2599,6 +2947,7 @@ export function OnRevived(eventPlayer: mod.Player, eventOtherPlayer: mod.Player)
 }
 
 export function OnPlayerDied(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDeathType: mod.DeathType, eventWeaponUnlock: mod.WeaponUnlock) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDeathType, eventWeaponUnlock };
     let eventNum = 6;
     OnPlayerDied_CustomAI_Score_Tracking(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
@@ -2606,6 +2955,7 @@ export function OnPlayerDied(eventPlayer: mod.Player, eventOtherPlayer: mod.Play
 }
 
 export function OnPlayerDeployed(eventPlayer: mod.Player) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 8;
     OnPlayerDeployed_Add_Equipment(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
@@ -2614,30 +2964,35 @@ export function OnPlayerDeployed(eventPlayer: mod.Player) {
 }
 
 export function OnPlayerJoinGame(eventPlayer: mod.Player) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 11;
     OnPlayerJoinGame_Sets_Scoreboard(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerUndeploy(eventPlayer: mod.Player) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 12;
     OnPlayerUndeploy_Death_Update(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnCapturePointCaptured(eventCapturePoint: mod.CapturePoint) {
+    ensureStateInitialized();
     const eventInfo = { eventCapturePoint };
     let eventNum = 0;
     OnCapturePointCaptured_On_Capture(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
 }
 
 export function OnCapturePointCapturing(eventCapturePoint: mod.CapturePoint) {
+    ensureStateInitialized();
     const eventInfo = { eventCapturePoint };
     let eventNum = 1;
     OnCapturePointCapturing_Notify_Capture(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
 }
 
 export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventCapturePoint };
     let eventNum = 13;
     OnPlayerEnterCapturePoint_CapturePoint_UI(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
@@ -2645,54 +3000,63 @@ export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCaptureP
 }
 
 export function OnPlayerExitCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventCapturePoint };
     let eventNum = 15;
     OnPlayerExitCapturePoint_Remove_CapturePoint_UI(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerInteract(eventPlayer: mod.Player, eventInteractPoint: mod.InteractPoint) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventInteractPoint };
     let eventNum = 16;
     OnPlayerInteract_Team_Switcher_and_Repel_Logic(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerEnterAreaTrigger(eventPlayer: mod.Player, eventAreaTrigger: mod.AreaTrigger) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventAreaTrigger };
     let eventNum = 17;
     OnPlayerEnterAreaTrigger_EnterArea(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerExitAreaTrigger(eventPlayer: mod.Player, eventAreaTrigger: mod.AreaTrigger) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventAreaTrigger };
     let eventNum = 18;
     OnPlayerExitAreaTrigger_Exit_Area(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OngoingCapturePoint(eventCapturePoint: mod.CapturePoint) {
+    ensureStateInitialized();
     const eventInfo = { eventCapturePoint: eventCapturePoint };
     let eventNum = 2;
     OngoingCapturePoint_Capture_Times(modlib.getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
 }
 
 export function OnPlayerDamaged(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDamageType: mod.DamageType, eventWeaponUnlock: mod.WeaponUnlock) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDamageType, eventWeaponUnlock };
     let eventNum = 19;
     OnPlayerDamaged_AI_Target_Shooter(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerExitVehicle(eventPlayer: mod.Player, eventVehicle: mod.Vehicle) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventVehicle };
     let eventNum = 20;
     OnPlayerExitVehicle_AI_Exit_Vehicle(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnPlayerEnterVehicle(eventPlayer: mod.Player, eventVehicle: mod.Vehicle) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer, eventVehicle };
     let eventNum = 21;
     OnPlayerEnterVehicle_AI_Enter_Vehicle(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
 }
 
 export function OnAIMoveToFailed(eventPlayer: mod.Player) {
+    ensureStateInitialized();
     const eventInfo = { eventPlayer };
     let eventNum = 22;
     OnAIMoveToFailed_AI_Retry_Move(modlib.getPlayerCondition(eventPlayer, eventNum++), eventInfo);
