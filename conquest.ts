@@ -1217,7 +1217,174 @@ class PlayerController {
         }
     }
 }
-class CapturePointController {}
+class CapturePointController {
+    setupCapturePoint(cp: mod.CapturePoint): void {
+        mod.SetCapturePointCapturingTime(cp, CONFIG.FLAG_CAPTURE_TIME)
+        mod.SetCapturePointNeutralizationTime(cp, CONFIG.FLAG_NEUTRAL_TIME)
+        mod.EnableGameModeObjective(cp, true)
+        mod.SetMaxCaptureMultiplier(cp, 3)
+    }
+
+    processObjectivePlayerData(player: mod.Player): void {
+        getPlayerState(player).captures += 1;
+        getPlayerState(player).score += 50;
+        uiController.updatePlayerScoreboard(player)
+        mod.PlaySound(audio.capturedSound!, 0.7, player)
+    }
+
+    onCaptured(eventInfo: CapturePointEventInfo): void {
+        uiController.updateScoreboard()
+        uiController.updateFlagIcons()
+        const playersOnObjective = filterModArray(
+            mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
+            (currentArrayElement: any) => mod.Equals(
+                mod.GetTeam(currentArrayElement),
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)));
+        for (let i = 0; i < mod.CountOf(playersOnObjective); i++) {
+            this.processObjectivePlayerData(mod.ValueInArray(playersOnObjective, i) as mod.Player)
+            if (mod.GetSoldierState(mod.ValueInArray(playersOnObjective, i), mod.SoldierStateBool.IsAISoldier)) {
+                startAIScouting(mod.ValueInArray(playersOnObjective, i))
+            }
+        }
+        this.spawnObjectiveVehicles(eventInfo)
+        if (FLAGS.ENABLE_VO) {
+            mod.PlayVO(audio.vo1!, mod.VoiceOverEvents2D.ObjectiveCaptured, mod.ValueInArray(flagAnnounce, mod.Subtract(
+                mod.GetObjId(eventInfo.eventCapturePoint),
+                200)), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo2!, mod.VoiceOverEvents2D.ObjectiveCapturedEnemy, mod.ValueInArray(flagAnnounce, mod.Subtract(
+                mod.GetObjId(eventInfo.eventCapturePoint),
+                200)), getTeamState(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)).otherTeam)
+        }
+    }
+
+    shouldNotifyCapture(eventInfo: CapturePointEventInfo): boolean {
+        return FLAGS.ENABLE_VO && mod.Equals(
+            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+            mod.GetTeam(0)) && mod.LessThan(mod.GetCaptureProgress(eventInfo.eventCapturePoint), 0.05);
+    }
+
+    async runProgressLoop(eventInfo: CapturePointEventInfo): Promise<void> {
+        while (!isGameOngoing) { await mod.Wait(999) }
+        if (FLAGS.CONQUEST_ASSAULT) {
+            mod.SetCapturePointOwner(eventInfo.eventCapturePoint, mod.GetTeam(2))
+        }
+        await mod.Wait(mod.RandomReal(0, 1))
+        const cpState = getCapturePointState(eventInfo.eventCapturePoint);
+        cpState.progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+        cpState.setProgressVisuals(cpState.progress);
+        while (true) {
+            uiController.flashCaptureProgressUI(eventInfo.eventCapturePoint, capturePointFlash)
+            if (mod.NotEqualTo(getCapturePointState(eventInfo.eventCapturePoint).progress, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
+                const cpState = getCapturePointState(eventInfo.eventCapturePoint);
+                cpState.setProgressVisuals(mod.GetCaptureProgress(eventInfo.eventCapturePoint));
+                uiController.manageCapturePointUI(eventInfo.eventCapturePoint, cpState.progress, eventInfo)
+            }
+            getCapturePointState(eventInfo.eventCapturePoint).progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+            await mod.Wait(0.1)
+        }
+    }
+
+    async onCapturing(eventInfo: CapturePointEventInfo): Promise<void> {
+        uiController.updateFlagIcons()
+        await mod.Wait(0.2)
+        uiController.updateScoreboard()
+        if (mod.NotEqualTo(mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint), mod.GetTeam(0))) {
+            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveNeutralised, mod.ValueInArray(flagAnnounce, mod.Subtract(
+                mod.GetObjId(eventInfo.eventCapturePoint),
+                200)), mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo4!, mod.VoiceOverEvents2D.ObjectiveLost, mod.ValueInArray(flagAnnounce, mod.Subtract(
+                mod.GetObjId(eventInfo.eventCapturePoint),
+                200)), mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint))
+        } else {
+            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveCapturing, mod.ValueInArray(flagAnnounce, mod.Subtract(
+                mod.GetObjId(eventInfo.eventCapturePoint),
+                200)), mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
+        }
+    }
+
+    spawnObjectiveVehicles(eventInfo: CapturePointEventInfo): void {
+        if (mod.Equals(
+            eventInfo.eventCapturePoint,
+            mod.GetCapturePoint(200))) {
+            if (mod.Equals(
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+                mod.GetTeam(1))) {
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(600), true)
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(601), false)
+            } else if (mod.Equals(
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+                mod.GetTeam(2))) {
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(601), true)
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(600), false)
+            } else {
+            }
+        }
+        if (mod.Equals(
+            eventInfo.eventCapturePoint,
+            mod.GetCapturePoint(201))) {
+            if (mod.Equals(
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+                mod.GetTeam(1))) {
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(610), true)
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(611), false)
+            } else if (mod.Equals(
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+                mod.GetTeam(2))) {
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(611), true)
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(610), false)
+            } else {
+            }
+        }
+        if (mod.Equals(
+            eventInfo.eventCapturePoint,
+            mod.GetCapturePoint(202))) {
+            if (mod.Equals(
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+                mod.GetTeam(1))) {
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(620), true)
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(621), false)
+            } else if (mod.Equals(
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+                mod.GetTeam(2))) {
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(621), true)
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(620), false)
+            } else {
+            }
+        }
+        if (mod.Equals(
+            eventInfo.eventCapturePoint,
+            mod.GetCapturePoint(203))) {
+            if (mod.Equals(
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+                mod.GetTeam(1))) {
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(630), true)
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(631), false)
+            } else if (mod.Equals(
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+                mod.GetTeam(2))) {
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(631), true)
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(630), false)
+            } else {
+            }
+        }
+        if (mod.Equals(
+            eventInfo.eventCapturePoint,
+            mod.GetCapturePoint(204))) {
+            if (mod.Equals(
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+                mod.GetTeam(1))) {
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(640), true)
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(641), false)
+            } else if (mod.Equals(
+                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
+                mod.GetTeam(2))) {
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(641), true)
+                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(640), false)
+            } else {
+            }
+        }
+    }
+}
 class AIController {}
 class ConquestGame {}
 
@@ -1312,7 +1479,7 @@ async function setupMap() {
     }
     uiController.setupColourFilter()
     for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
-        setupCapturePoint(mod.ValueInArray(mod.AllCapturePoints(), i))
+        capturePointController.setupCapturePoint(mod.ValueInArray(mod.AllCapturePoints(), i))
     }
     mod.SetUnspawnDelayInSeconds(mod.GetSpawner(901), 300)
     mod.SetUnspawnDelayInSeconds(mod.GetSpawner(902), 300)
@@ -1557,69 +1724,21 @@ function updateDeathOnUndeployRule(conditionState: any, eventInfo: any) {
     playerController.onUndeploy(eventInfo);
 }
 
-async function handleCapturePointCaptured(eventInfo: any) {
-    await mod.Wait(0.2)
-    uiController.updateScoreboard()
-    uiController.updateFlagIcons()
-    const playersOnObjective = filterModArray(
-        mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
-        (currentArrayElement: any) => mod.Equals(
-            mod.GetTeam(currentArrayElement),
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)));
-    for (let i = 0; i < mod.CountOf(playersOnObjective); i++) {
-        processObjectivePlayerData(mod.ValueInArray(playersOnObjective, i))
-        if (mod.GetSoldierState(mod.ValueInArray(playersOnObjective, i), mod.SoldierStateBool.IsAISoldier)) {
-            startAIScouting(mod.ValueInArray(playersOnObjective, i))
-        }
-    }
-    spawnObjectiveVehicles(eventInfo)
-    if (FLAGS.ENABLE_VO) {
-        mod.PlayVO(audio.vo1!, mod.VoiceOverEvents2D.ObjectiveCaptured, mod.ValueInArray(flagAnnounce, mod.Subtract(
-            mod.GetObjId(eventInfo.eventCapturePoint),
-            200)), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))
-        mod.PlayVO(audio.vo2!, mod.VoiceOverEvents2D.ObjectiveCapturedEnemy, mod.ValueInArray(flagAnnounce, mod.Subtract(
-            mod.GetObjId(eventInfo.eventCapturePoint),
-            200)), getTeamState(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)).otherTeam)
-    }
-}
-function handleCapturePointCapturedRule(conditionState: any, eventInfo: any) {
+async function handleCapturePointCapturedRule(conditionState: any, eventInfo: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    handleCapturePointCaptured(eventInfo);
-}
-
-function shouldNotifyCapture(eventInfo: any): boolean {
-    const newState = FLAGS.ENABLE_VO && mod.Equals(
-        mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-        mod.GetTeam(0)) && mod.LessThan(mod.GetCaptureProgress(eventInfo.eventCapturePoint), 0.05);
-    return newState;
-}
-
-async function notifyCapture(eventInfo: any) {
-    uiController.updateFlagIcons()
     await mod.Wait(0.2)
-    uiController.updateScoreboard()
-    if (mod.NotEqualTo(mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint), mod.GetTeam(0))) {
-        mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveNeutralised, mod.ValueInArray(flagAnnounce, mod.Subtract(
-            mod.GetObjId(eventInfo.eventCapturePoint),
-            200)), mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
-        mod.PlayVO(audio.vo4!, mod.VoiceOverEvents2D.ObjectiveLost, mod.ValueInArray(flagAnnounce, mod.Subtract(
-            mod.GetObjId(eventInfo.eventCapturePoint),
-            200)), mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint))
-    } else {
-        mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveCapturing, mod.ValueInArray(flagAnnounce, mod.Subtract(
-            mod.GetObjId(eventInfo.eventCapturePoint),
-            200)), mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
-    }
+    capturePointController.onCaptured(eventInfo);
 }
-function notifyCaptureRule(conditionState: any, eventInfo: any) {
-    let newState = shouldNotifyCapture(eventInfo);
+
+async function notifyCaptureRule(conditionState: any, eventInfo: any) {
+    let newState = capturePointController.shouldNotifyCapture(eventInfo);
     if (!conditionState.update(newState)) {
         return;
     }
-    notifyCapture(eventInfo);
+    await capturePointController.onCapturing(eventInfo);
 }
 
 function shouldPlayNearEndMusic(): boolean {
@@ -1947,33 +2066,12 @@ function playVOTeam2LowTicketsRule(conditionState: any) {
     playVOTeam2LowTickets();
 }
 
-async function updateCaptureProgress(eventInfo: any) {
-    while (!isGameOngoing) { await mod.Wait(999) }
-    if (FLAGS.CONQUEST_ASSAULT) {
-        mod.SetCapturePointOwner(eventInfo.eventCapturePoint, mod.GetTeam(2))
-    }
-    await mod.Wait(mod.RandomReal(0, 1))
-    const cpState = getCapturePointState(eventInfo.eventCapturePoint);
-    cpState.progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
-    cpState.setProgressVisuals(cpState.progress);
-    // TODO: make this function "async"
-    while (true) {
-        uiController.flashCaptureProgressUI(eventInfo.eventCapturePoint, capturePointFlash)
-        if (mod.NotEqualTo(getCapturePointState(eventInfo.eventCapturePoint).progress, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
-            const cpState = getCapturePointState(eventInfo.eventCapturePoint);
-            cpState.setProgressVisuals(mod.GetCaptureProgress(eventInfo.eventCapturePoint));
-            uiController.manageCapturePointUI(eventInfo.eventCapturePoint, cpState.progress, eventInfo)
-        }
-        getCapturePointState(eventInfo.eventCapturePoint).progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
-        await mod.Wait(0.1)
-    }
-}
 function runCaptureProgressRule(conditionState: any, eventInfo: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    updateCaptureProgress(eventInfo);
+    capturePointController.runProgressLoop(eventInfo);
 }
 
 function shouldAIScoutOnDeploy(eventInfo: any): boolean {
@@ -2183,106 +2281,7 @@ function aiTargetOnKillAssistRule(conditionState: any, eventInfo: any) {
 
 
 
-function setupCapturePoint(Objective: any) {
 
-
-    mod.SetCapturePointCapturingTime(Objective, CONFIG.FLAG_CAPTURE_TIME)
-    mod.SetCapturePointNeutralizationTime(Objective, CONFIG.FLAG_NEUTRAL_TIME)
-    mod.EnableGameModeObjective(Objective, true)
-    mod.SetMaxCaptureMultiplier(Objective, 3)
-}
-function spawnObjectiveVehicles(eventInfo: any) {
-
-
-    if (mod.Equals(
-        eventInfo.eventCapturePoint,
-        mod.GetCapturePoint(200))) {
-        if (mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(1))) {
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(600), true)
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(601), false)
-        } else if (mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(2))) {
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(601), true)
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(600), false)
-        } else {
-        }
-    }
-    if (mod.Equals(
-        eventInfo.eventCapturePoint,
-        mod.GetCapturePoint(201))) {
-        if (mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(1))) {
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(610), true)
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(611), false)
-        } else if (mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(2))) {
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(611), true)
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(610), false)
-        } else {
-        }
-    }
-    if (mod.Equals(
-        eventInfo.eventCapturePoint,
-        mod.GetCapturePoint(202))) {
-        if (mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(1))) {
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(620), true)
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(621), false)
-        } else if (mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(2))) {
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(621), true)
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(620), false)
-        } else {
-        }
-    }
-    if (mod.Equals(
-        eventInfo.eventCapturePoint,
-        mod.GetCapturePoint(203))) {
-        if (mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(1))) {
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(630), true)
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(631), false)
-        } else if (mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(2))) {
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(631), true)
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(630), false)
-        } else {
-        }
-    }
-    if (mod.Equals(
-        eventInfo.eventCapturePoint,
-        mod.GetCapturePoint(204))) {
-        if (mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(1))) {
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(640), true)
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(641), false)
-        } else if (mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(2))) {
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(641), true)
-            mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(640), false)
-        } else {
-        }
-    }
-}
-function processObjectivePlayerData(Player: any) {
-
-
-    getPlayerState(Player).captures += 1;
-    getPlayerState(Player).score += 50;
-    uiController.updatePlayerScoreboard(Player)
-    mod.PlaySound(audio.capturedSound!, 0.7, Player)
-}
 
 
 
