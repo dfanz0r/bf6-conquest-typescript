@@ -50,28 +50,28 @@ let enemyBGColour: mod.Vector;
 // --- 1c. Spawned Object References ---
 
 const audio = {
-    vo1: null as mod.SpatialObject | null,
-    vo2: null as mod.SpatialObject | null,
-    vo3: null as mod.SpatialObject | null,
-    vo4: null as mod.SpatialObject | null,
-    vo5: null as mod.SpatialObject | null,
-    vo6: null as mod.SpatialObject | null,
-    tickSoundTaking: null as mod.SpatialObject | null,
-    tickSoundLosing: null as mod.SpatialObject | null,
-    capturedSound: null as mod.SpatialObject | null,
-    oobSound: null as mod.SpatialObject | null,
+    vo1: null as mod.VO | null,
+    vo2: null as mod.VO | null,
+    vo3: null as mod.VO | null,
+    vo4: null as mod.VO | null,
+    vo5: null as mod.VO | null,
+    vo6: null as mod.VO | null,
+    tickSoundTaking: null as mod.SFX | null,
+    tickSoundLosing: null as mod.SFX | null,
+    capturedSound: null as mod.SFX | null,
+    oobSound: null as mod.SFX | null,
 };
 
 let snowVolume: mod.SpatialObject | null = null;
 
-// --- 1d. Static Native Arrays ---
+// --- 1d. Static Portal Arrays ---
 
-const flagAnnounce: mod.VoiceOverFlags[] = [];
-const flagLetters: string[] = [];
-const botNames: string[] = [];
+let flagAnnounce: mod.Array;
+let flagLetters: mod.Array;
+let botNames: mod.Array;
 const uiIdPool: string[] = [];
 const activeUiIds = new Set<string>();
-const objectiveTrackingUI: string[] = [];
+let objectiveTrackingUI: mod.Array;
 
 // --- 1e. Player State ---
 
@@ -97,7 +97,7 @@ class PlayerState {
 
     aiTarget: mod.Player | mod.CapturePoint | null = null;
     aiInAction = false;
-    aiSpawnPoints: mod.Array = mod.EmptyArray();
+    aiSpawnPoints: mod.Array = undefined!;
     startPosition: mod.Vector | null = null;
 }
 
@@ -302,15 +302,15 @@ function initTeams(): void {
 }
 
 function initStaticArrays(): void {
-    flagAnnounce.length = 0;
-    flagLetters.length = 0;
-    botNames.length = 0;
-    objectiveTrackingUI.length = 0;
     uiIdPool.length = 0;
     activeUiIds.clear();
 
-    // Fill these by migrating the existing initPlayerUIIds(), initObjectiveLetters(),
-    // initObjectiveTeamUI(), initBotNames(), and initFlagCalls() data.
+    // Populate static arrays
+    initPlayerUIIds();
+    initObjectiveLetters();
+    initObjectiveTeamUI();
+    initBotNames();
+    initFlagCalls();
 }
 
 function initPlayerState(player: mod.Player): PlayerState {
@@ -440,45 +440,45 @@ function isTrueForAny(array: mod.Array, predicate: (value: any) => boolean): boo
 // ============================================================
 
 function initGameSettings() {
-    mod.SetVariable(GameOngoingGlobalVar, false)
-    mod.SetVariable(EnableCustomAIGlobalVar, true)
-    mod.SetVariable(MaxCustomAIGlobalVar, 36)
-    mod.SetVariable(EnableTeamSwitchingGlobalVar, true)
-    mod.SetVariable(TimeLimitGlobalVar, 2700)
-    mod.SetVariable(StartingScoreGlobalVar, 1500)
-    mod.SetVariable(LowTicketMusicGlobalVar, 100)
-    mod.SetVariable(LoserOnlyTicketBleedGlobalVar, true)
-    mod.SetVariable(TotalControlTicketBleedGlobalVar, true)
-    mod.SetVariable(TotalControlBonusGlobalVar, 10)
-    mod.SetVariable(TicketBleedSpeedGlobalVar, 2)
-    mod.SetVariable(PlayerDeathsBleedGlobalVar, true)
-    mod.SetVariable(FlagCaptureTimeGlobalVar, 15)
-    mod.SetVariable(FlagNeutralTimeGlobalVar, 20)
-    mod.SetVariable(EnableVOGlobalVar, true)
-    mod.SetVariable(EnableSnowGlobalVar, false)
-    mod.SetVariable(Snow_ColourFilterGlobalVar, false)
-    mod.SetVariable(BF3_ColourFilterGlobalVar, false)
-    mod.SetVariable(BF4_ColourFilterGlobalVar, false)
-    mod.SetVariable(GivePlayersNVGGlobalVar, false)
-    mod.SetVariable(ConquestAssaultGlobalVar, false)
+    isGameOngoing = false;
+    // FLAGS.ENABLE_CUSTOM_AI is a constant
+    // CONFIG.MAX_CUSTOM_AI is a constant
+    // FLAGS.ENABLE_TEAM_SWITCHING is a constant
+    // CONFIG.TIME_LIMIT is a constant
+    // CONFIG.STARTING_SCORE is a constant
+    // CONFIG.LOW_TICKET_MUSIC_THRESHOLD is a constant
+    // FLAGS.LOSER_ONLY_TICKET_BLEED is a constant
+    // FLAGS.TOTAL_CONTROL_TICKET_BLEED is a constant
+    // CONFIG.TOTAL_CONTROL_BONUS is a constant
+    // CONFIG.TICKET_BLEED_SPEED is a constant
+    // FLAGS.PLAYER_DEATHS_BLEED is a constant
+    // CONFIG.FLAG_CAPTURE_TIME is a constant
+    // CONFIG.FLAG_NEUTRAL_TIME is a constant
+    // FLAGS.ENABLE_VO is a constant
+    // FLAGS.ENABLE_SNOW is a constant
+    // FLAGS.SNOW_COLOUR_FILTER is a constant
+    // FLAGS.BF3_COLOUR_FILTER is a constant
+    // FLAGS.BF4_COLOUR_FILTER is a constant
+    // FLAGS.GIVE_PLAYERS_NVG is a constant
+    // FLAGS.CONQUEST_ASSAULT is a constant
     getTeamState(TEAM_1).startingScore = 2000;
     getTeamState(TEAM_2).startingScore = 1500;
-    if (mod.Not(mod.GetVariable(ConquestAssaultGlobalVar))) {
-        getTeamState(TEAM_1).startingScore = mod.GetVariable(StartingScoreGlobalVar);
-        getTeamState(TEAM_2).startingScore = mod.GetVariable(StartingScoreGlobalVar);
+    if (mod.Not(FLAGS.CONQUEST_ASSAULT)) {
+        getTeamState(TEAM_1).startingScore = CONFIG.STARTING_SCORE;
+        getTeamState(TEAM_2).startingScore = CONFIG.STARTING_SCORE;
     }
     getTeamState(TEAM_1).score = getTeamState(TEAM_1).startingScore;
     getTeamState(TEAM_2).score = getTeamState(TEAM_2).startingScore;
     getTeamState(TEAM_1).otherTeam = mod.GetTeam(2);
     getTeamState(TEAM_2).otherTeam = mod.GetTeam(1);
-    mod.SetVariable(ScorePositionLeftGlobalVar, mod.CreateVector(-315, 45, 0))
-    mod.SetVariable(ScorePositionRightGlobalVar, mod.CreateVector(315, 45, 0))
-    mod.SetVariable(FriendlyTextColourGlobalVar, mod.CreateVector(0, 0.8, 1))
-    mod.SetVariable(FriendlyBGColourGlobalVar, mod.CreateVector(0, 0.2, 0.5))
-    mod.SetVariable(EnemyTextColourGlobalVar, mod.CreateVector(1, 0.2, 0.2))
-    mod.SetVariable(EnemyBGColourGlobalVar, mod.CreateVector(0.6, 0.1, 0.1))
-    mod.SetVariable(resetFXingGlobalVar, false)
-    mod.SetVariable(CapturePointProgressGlobalVar, mod.EmptyArray())
+    scorePositionLeft = mod.CreateVector(-315, 45, 0);
+    scorePositionRight = mod.CreateVector(315, 45, 0);
+    friendlyTextColour = mod.CreateVector(0, 0.8, 1);
+    friendlyBGColour = mod.CreateVector(0, 0.2, 0.5);
+    enemyTextColour = mod.CreateVector(1, 0.2, 0.2);
+    enemyBGColour = mod.CreateVector(0.6, 0.1, 0.1);
+    isFXResetting = false;
+    // CapturePointProgress is now in CapturePointState
     mod.SetVariable(UniqueUI_ID_UsedGlobalVar, mod.EmptyArray())
     // PlayersOnPoint is now a Map, initialized in TeamState constructor
     // PlayersOnPoint is now a Map, initialized in TeamState constructor
@@ -490,8 +490,8 @@ function initGameSettings() {
     // Cap_Message is now a Map, initialized in TeamState constructor
     // Cap_Progress is now a Map, initialized in TeamState constructor
     // Cap_Progress is now a Map, initialized in TeamState constructor
-    mod.SetVariable(CaptureProgressSizeGlobalVar, mod.EmptyArray())
-    mod.SetVariable(CaptureProgressPositionGlobalVar, mod.EmptyArray())
+    // CaptureProgressSize is now in CapturePointState
+    // CaptureProgressPosition is now in CapturePointState
     initPlayerUIIds()
     initObjectiveLetters()
     initObjectiveTeamUI()
@@ -507,7 +507,7 @@ function initGameSettingsRule(conditionState: any) {
 }
 
 async function setupMap() {
-    mod.SetGameModeTimeLimit(mod.GetVariable(TimeLimitGlobalVar))
+    mod.SetGameModeTimeLimit(CONFIG.TIME_LIMIT)
     mod.SetGameModeTargetScore(1)
     mod.SetVehicleCategoryAllowedInSurroundingArea(mod.VehicleCategories.Air_All, true)
     if (mod.IsFaction(mod.GetTeam(1), mod.Factions.NATO)) {
@@ -523,19 +523,19 @@ async function setupMap() {
     setupMainUI()
     updateScoreboard()
     updateFlagIcons()
-    if (mod.GetVariable(EnableSnowGlobalVar)) {
-        mod.SetVariable(SnowGlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.EnvironmentDecalVolume_Winter_Event, mod.GetObjectPosition(mod.GetCapturePoint(200)), mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 10000)))
+    if (FLAGS.ENABLE_SNOW) {
+        snowVolume = mod.SpawnObject(mod.RuntimeSpawn_Common.EnvironmentDecalVolume_Winter_Event, mod.GetObjectPosition(mod.GetCapturePoint(200)), mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 10000));
     }
     mod.AddUIContainer("container2", mod.CreateVector(0, 0, 0), mod.CreateVector(20000, 20000, 0), mod.UIAnchor.TopCenter)
-    if (mod.GetVariable(BF3_ColourFilterGlobalVar)) {
+    if (FLAGS.BF3_COLOUR_FILTER) {
         mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("container2"), mod.CreateVector(0, 0.8, 1))
         mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName("container2"), 0.2)
         mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName("container2"), mod.UIBgFill.Blur)
-    } else if (mod.GetVariable(BF4_ColourFilterGlobalVar)) {
+    } else if (FLAGS.BF4_COLOUR_FILTER) {
         mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("container2"), mod.CreateVector(1, 0.5, 0))
         mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName("container2"), 0.2)
         mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName("container2"), mod.UIBgFill.Blur)
-    } else if (mod.GetVariable(Snow_ColourFilterGlobalVar)) {
+    } else if (FLAGS.SNOW_COLOUR_FILTER) {
         mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("container2"), mod.CreateVector(0, 0.4, 0.7))
         mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName("container2"), 0.2)
         mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName("container2"), mod.UIBgFill.Blur)
@@ -548,34 +548,33 @@ async function setupMap() {
     mod.SetUnspawnDelayInSeconds(mod.GetSpawner(901), 300)
     mod.SetUnspawnDelayInSeconds(mod.GetSpawner(902), 300)
     showVersion()
-    mod.SetVariable(VO1GlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
-    mod.SetVariable(VO2GlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
-    mod.SetVariable(VO3GlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
-    mod.SetVariable(VO4GlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
-    mod.SetVariable(VO5GlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
-    mod.SetVariable(VO6GlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
-    mod.SetVariable(TickSoundTakingGlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickIcon_IsFriendly_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
-    mod.SetVariable(TickSoundLosingGlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickEnemy_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
-    mod.SetVariable(CapturedSoundGlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_OnCapturedByFriendly_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
-    mod.SetVariable(OOBSoundGlobalVar, mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_OutOfBounds_Countdown_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0)))
+    audio.vo1 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+    audio.vo2 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+    audio.vo3 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+    audio.vo4 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+    audio.vo5 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+    audio.vo6 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+    audio.tickSoundTaking = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickIcon_IsFriendly_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+    audio.tickSoundLosing = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickEnemy_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+    audio.capturedSound = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_OnCapturedByFriendly_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+    audio.oobSound = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_OutOfBounds_Countdown_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
     mod.PlayMusic(mod.MusicEvents.Core_LastPhaseBegin)
     mod.LoadMusic(mod.MusicPackages.Core)
     await mod.Wait(2)
-    mod.SetVariable(GameOngoingGlobalVar, true)
-    if (mod.GetVariable(ConquestAssaultGlobalVar)) {
+    isGameOngoing = true;
+    if (FLAGS.CONQUEST_ASSAULT) {
         mod.EnableHQ(mod.GetHQ(2), false)
     }
     for (let i = 2000; i < 2999; i++) {
         mod.EnableVFX(mod.GetVFX(i), true)
     }
-    mod.SetVariable(GameOngoingGlobalVar, true)
-    while (mod.GetVariable(GameOngoingGlobalVar)) {
+    while (isGameOngoing) {
         for (let i = 10; i < 0; i += -2) {
-            mod.SetVariable(CapturepointFlashGlobalVar, i / 10)
+            capturePointFlash = i / 10;
             await mod.Wait(0.1)
         }
         for (let i = 0; i < 10; i += 2) {
-            mod.SetVariable(CapturepointFlashGlobalVar, i / 10)
+            capturePointFlash = i / 10;
             await mod.Wait(0.1)
         }
     }
@@ -589,7 +588,7 @@ function setupMapRule(conditionState: any) {
 }
 
 function shouldUpdateScoreTime(): boolean {
-    const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Equals(
+    const newState = mod.And(isGameOngoing, mod.Equals(
         mod.Modulo(
             mod.RoundToInteger(mod.GetMatchTimeElapsed()),
             2),
@@ -613,7 +612,7 @@ function updateScoreTimeRule(conditionState: any) {
 }
 
 function shouldUpdateScoreTimeOddTick(): boolean {
-    const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Equals(
+    const newState = mod.And(isGameOngoing, mod.Equals(
         mod.Modulo(
             mod.RoundToInteger(mod.GetMatchTimeElapsed()),
             2),
@@ -636,28 +635,28 @@ function updateScoreTimeSecondaryTickRule(conditionState: any) {
 }
 
 function shouldTrackScore(): boolean {
-    const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Equals(
+    const newState = mod.And(isGameOngoing, mod.Equals(
         mod.Modulo(
             mod.RoundToInteger(mod.GetMatchTimeElapsed()),
-            mod.GetVariable(TicketBleedSpeedGlobalVar)),
+            CONFIG.TICKET_BLEED_SPEED),
         0))
     return newState;
 }
 
 function trackScoreAndBleed() {
-    if (mod.GetVariable(TotalControlTicketBleedGlobalVar)) {
+    if (FLAGS.TOTAL_CONTROL_TICKET_BLEED) {
         if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
             mod.GetCurrentOwnerTeam(currentArrayElement),
             mod.GetTeam(1)))) {
-            getTeamState(TEAM_2).score -= mod.GetVariable(TotalControlBonusGlobalVar);
+            getTeamState(TEAM_2).score -= CONFIG.TOTAL_CONTROL_BONUS;
         } else if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
             mod.GetCurrentOwnerTeam(currentArrayElement),
             mod.GetTeam(2)))) {
-            getTeamState(TEAM_1).score -= mod.GetVariable(TotalControlBonusGlobalVar);
+            getTeamState(TEAM_1).score -= CONFIG.TOTAL_CONTROL_BONUS;
         } else {
         }
     }
-    if (mod.GetVariable(LoserOnlyTicketBleedGlobalVar)) {
+    if (FLAGS.LOSER_ONLY_TICKET_BLEED) {
         if (mod.GreaterThan(
             mod.CountOf(filterModArray(
                 mod.AllCapturePoints(),
@@ -788,11 +787,11 @@ async function handlePlayerDeath(eventInfo: any) {
     if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
         disableOutOfBounds(eventInfo)
     }
-    if (mod.GetVariable(EnableCustomAIGlobalVar)) {
+    if (FLAGS.ENABLE_CUSTOM_AI) {
         if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
             if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier)) {
                 if (mod.And(
-                    mod.GetVariable(PlayerDeathsBleedGlobalVar),
+                    FLAGS.PLAYER_DEATHS_BLEED,
                     mod.NotEqualTo(eventInfo.eventPlayer, eventInfo.eventOtherPlayer))) {
                     getTeamState(mod.GetTeam(eventInfo.eventPlayer)).score -= 1;
                 }
@@ -821,7 +820,7 @@ function handlePlayerDeathRule(conditionState: any, eventInfo: any) {
 }
 
 function addEquipment(eventInfo: any) {
-    if (mod.GetVariable(GivePlayersNVGGlobalVar)) {
+    if (FLAGS.GIVE_PLAYERS_NVG) {
         mod.AddEquipment(eventInfo.eventPlayer, mod.Gadgets.Mask_NVG)
     }
 }
@@ -846,7 +845,7 @@ async function handlePlayerJoin(eventInfo: any) {
             mod.SendErrorReport(mod.Message("Player Joined {}", eventInfo.eventPlayer))
             setupPlayerUI(eventInfo)
             await mod.Wait(5)
-            if (mod.GetVariable(GameOngoingGlobalVar)) {
+            if (isGameOngoing) {
                 await mod.Wait(0.1)
                 resetFX(eventInfo)
             }
@@ -862,12 +861,12 @@ function handlePlayerJoinRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldUpdateDeathOnUndeploy(eventInfo: any): boolean {
-    const newState = mod.GetVariable(GameOngoingGlobalVar);
+    const newState = isGameOngoing;
     return newState;
 }
 
 function updateDeathOnUndeploy(eventInfo: any) {
-    if (mod.GetVariable(PlayerDeathsBleedGlobalVar)) {
+    if (FLAGS.PLAYER_DEATHS_BLEED) {
         getTeamState(mod.GetTeam(eventInfo.eventPlayer)).score -= 1;
     }
     getPlayerState(eventInfo.eventPlayer).deaths += 1;
@@ -887,24 +886,23 @@ async function handleCapturePointCaptured(eventInfo: any) {
     await mod.Wait(0.2)
     updateScoreboard()
     updateFlagIcons()
-    mod.SetVariable(PlayersOnObjectiveGlobalVar, mod.EmptyArray())
-    mod.SetVariable(PlayersOnObjectiveGlobalVar, filterModArray(
+    const playersOnObjective = filterModArray(
         mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
         (currentArrayElement: any) => mod.Equals(
             mod.GetTeam(currentArrayElement),
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))))
-    for (let i = 0; i < mod.CountOf(mod.GetVariable(PlayersOnObjectiveGlobalVar)); i++) {
-        processObjectivePlayerData(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), i))
-        if (mod.GetSoldierState(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), i), mod.SoldierStateBool.IsAISoldier)) {
-            startAIScouting(mod.ValueInArray(mod.GetVariable(PlayersOnObjectiveGlobalVar), i))
+            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)));
+    for (let i = 0; i < mod.CountOf(playersOnObjective); i++) {
+        processObjectivePlayerData(mod.ValueInArray(playersOnObjective, i))
+        if (mod.GetSoldierState(mod.ValueInArray(playersOnObjective, i), mod.SoldierStateBool.IsAISoldier)) {
+            startAIScouting(mod.ValueInArray(playersOnObjective, i))
         }
     }
     spawnObjectiveVehicles(eventInfo)
-    if (mod.GetVariable(EnableVOGlobalVar)) {
-        mod.PlayVO(mod.GetVariable(VO1GlobalVar), mod.VoiceOverEvents2D.ObjectiveCaptured, mod.ValueInArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.Subtract(
+    if (FLAGS.ENABLE_VO) {
+        mod.PlayVO(audio.vo1!, mod.VoiceOverEvents2D.ObjectiveCaptured, mod.ValueInArray(flagAnnounce, mod.Subtract(
             mod.GetObjId(eventInfo.eventCapturePoint),
             200)), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))
-        mod.PlayVO(mod.GetVariable(VO2GlobalVar), mod.VoiceOverEvents2D.ObjectiveCapturedEnemy, mod.ValueInArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.Subtract(
+        mod.PlayVO(audio.vo2!, mod.VoiceOverEvents2D.ObjectiveCapturedEnemy, mod.ValueInArray(flagAnnounce, mod.Subtract(
             mod.GetObjId(eventInfo.eventCapturePoint),
             200)), getTeamState(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)).otherTeam)
     }
@@ -918,7 +916,7 @@ function handleCapturePointCapturedRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldNotifyCapture(eventInfo: any): boolean {
-    const newState = mod.GetVariable(EnableVOGlobalVar) && mod.Equals(
+    const newState = FLAGS.ENABLE_VO && mod.Equals(
         mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
         mod.GetTeam(0)) && mod.LessThan(mod.GetCaptureProgress(eventInfo.eventCapturePoint), 0.05);
     return newState;
@@ -929,14 +927,14 @@ async function notifyCapture(eventInfo: any) {
     await mod.Wait(0.2)
     updateScoreboard()
     if (mod.NotEqualTo(mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint), mod.GetTeam(0))) {
-        mod.PlayVO(mod.GetVariable(VO3GlobalVar), mod.VoiceOverEvents2D.ObjectiveNeutralised, mod.ValueInArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.Subtract(
+        mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveNeutralised, mod.ValueInArray(flagAnnounce, mod.Subtract(
             mod.GetObjId(eventInfo.eventCapturePoint),
             200)), mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
-        mod.PlayVO(mod.GetVariable(VO4GlobalVar), mod.VoiceOverEvents2D.ObjectiveLost, mod.ValueInArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.Subtract(
+        mod.PlayVO(audio.vo4!, mod.VoiceOverEvents2D.ObjectiveLost, mod.ValueInArray(flagAnnounce, mod.Subtract(
             mod.GetObjId(eventInfo.eventCapturePoint),
             200)), mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint))
     } else {
-        mod.PlayVO(mod.GetVariable(VO3GlobalVar), mod.VoiceOverEvents2D.ObjectiveCapturing, mod.ValueInArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.Subtract(
+        mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveCapturing, mod.ValueInArray(flagAnnounce, mod.Subtract(
             mod.GetObjId(eventInfo.eventCapturePoint),
             200)), mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
     }
@@ -950,11 +948,11 @@ function notifyCaptureRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldPlayNearEndMusic(): boolean {
-    const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Or(
+    const newState = mod.And(isGameOngoing, mod.Or(
         mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 60),
         mod.Or(
-            mod.LessThanEqualTo(getTeamState(TEAM_1).score, mod.GetVariable(LowTicketMusicGlobalVar)),
-            mod.LessThanEqualTo(getTeamState(TEAM_2).score, mod.GetVariable(LowTicketMusicGlobalVar)))))
+            mod.LessThanEqualTo(getTeamState(TEAM_1).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD),
+            mod.LessThanEqualTo(getTeamState(TEAM_2).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD))))
     return newState;
 }
 
@@ -970,7 +968,7 @@ function playNearEndMusicRule(conditionState: any) {
 }
 
 function shouldEndGame(): boolean {
-    const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Or(
+    const newState = mod.And(isGameOngoing, mod.Or(
         mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 1),
         mod.Or(
             mod.LessThanEqualTo(getTeamState(TEAM_1).score, 0),
@@ -979,7 +977,7 @@ function shouldEndGame(): boolean {
 }
 
 async function endGame() {
-    mod.SetVariable(GameOngoingGlobalVar, false)
+    isGameOngoing = false;
     mod.PauseGameModeTime(true)
     if (mod.LessThan(
         getTeamState(TEAM_1).score,
@@ -1002,8 +1000,8 @@ async function endGame() {
     } else {
     }
     mod.PlayMusic(mod.MusicEvents.Core_EndOfRound_Loop)
-    mod.SetVariable(ScorePositionLeftGlobalVar, mod.CreateVector(-300, 385, 0))
-    mod.SetVariable(ScorePositionRightGlobalVar, mod.CreateVector(300, 385, 0))
+    scorePositionLeft = mod.CreateVector(-300, 385, 0);
+    scorePositionRight = mod.CreateVector(300, 385, 0);
     updateScoreboard()
     mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Timer"), mod.CreateVector(190, 60, 0))
     mod.SetUITextSize(mod.FindUIWidgetWithName("Timer"), 48)
@@ -1014,13 +1012,13 @@ async function endGame() {
     mod.DeleteUIWidget(mod.FindUIWidgetWithName("Team2RightBar"))
     mod.DeleteUIWidget(mod.FindUIWidgetWithName("LeftBarBG"))
     mod.DeleteUIWidget(mod.FindUIWidgetWithName("RightBarBG"))
-    for (let i = 0; i < mod.CountOf(mod.GetVariable(ObjectiveTrackingUIGlobalVar)); i++) {
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)))
+    for (let i = 0; i < mod.CountOf(objectiveTrackingUI); i++) {
+        mod.DeleteUIWidget(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, i)))
     }
-    showEndGameUI("Team1ScoreLeft", mod.GetVariable(ScorePositionLeftGlobalVar))
-    showEndGameUI("Team1ScoreRight", mod.GetVariable(ScorePositionRightGlobalVar))
-    showEndGameUI("Team2ScoreLeft", mod.GetVariable(ScorePositionLeftGlobalVar))
-    showEndGameUI("Team2ScoreRight", mod.GetVariable(ScorePositionRightGlobalVar))
+    showEndGameUI("Team1ScoreLeft", scorePositionLeft)
+    showEndGameUI("Team1ScoreRight", scorePositionRight)
+    showEndGameUI("Team2ScoreLeft", scorePositionLeft)
+    showEndGameUI("Team2ScoreRight", scorePositionRight)
     await mod.Wait(4)
     if (mod.GreaterThan(
         getTeamState(TEAM_1).score,
@@ -1173,7 +1171,7 @@ function updatePlayerCountOnReviveRule(conditionState: any, eventInfo: any) {
 }
 
 async function handleTeamSwitchAndRepel(eventInfo: any) {
-    if (mod.GetVariable(EnableTeamSwitchingGlobalVar)) {
+    if (FLAGS.ENABLE_TEAM_SWITCHING) {
         if (mod.Or(
             mod.Equals(
                 mod.GetInteractPoint(998),
@@ -1312,13 +1310,13 @@ function exitAreaTriggerRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldPlayVOLowTime(): boolean {
-    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 300);
+    const newState = isGameOngoing && FLAGS.ENABLE_VO && mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 300);
     return newState;
 }
 
 function playVOLowTime() {
-    mod.PlayVO(mod.GetVariable(VO5GlobalVar), mod.VoiceOverEvents2D.TimeLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
-    mod.PlayVO(mod.GetVariable(VO6GlobalVar), mod.VoiceOverEvents2D.TimeLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
+    mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.TimeLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
+    mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.TimeLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
 }
 function playVOLowTimeRule(conditionState: any) {
     let newState = shouldPlayVOLowTime();
@@ -1329,15 +1327,15 @@ function playVOLowTimeRule(conditionState: any) {
 }
 
 function shouldPlayVOWinning(): boolean {
-    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.GreaterThan(
+    const newState = isGameOngoing && FLAGS.ENABLE_VO && mod.GreaterThan(
         getTeamState(TEAM_1).score,
         getTeamState(TEAM_2).score);
     return newState;
 }
 
 function playVOWinning() {
-    mod.PlayVO(mod.GetVariable(VO5GlobalVar), mod.VoiceOverEvents2D.ProgressMidWinning, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
-    mod.PlayVO(mod.GetVariable(VO6GlobalVar), mod.VoiceOverEvents2D.ProgressMidLosing, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
+    mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.ProgressMidWinning, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
+    mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.ProgressMidLosing, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
 }
 function playVOWinningRule(conditionState: any) {
     let newState = shouldPlayVOWinning();
@@ -1348,15 +1346,15 @@ function playVOWinningRule(conditionState: any) {
 }
 
 function shouldPlayVOTeam2Winning(): boolean {
-    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.GreaterThan(
+    const newState = isGameOngoing && FLAGS.ENABLE_VO && mod.GreaterThan(
         getTeamState(TEAM_2).score,
         getTeamState(TEAM_1).score);
     return newState;
 }
 
 function playVOTeam2Winning() {
-    mod.PlayVO(mod.GetVariable(VO5GlobalVar), mod.VoiceOverEvents2D.ProgressMidWinning, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
-    mod.PlayVO(mod.GetVariable(VO6GlobalVar), mod.VoiceOverEvents2D.ProgressMidLosing, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
+    mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.ProgressMidWinning, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
+    mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.ProgressMidLosing, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
 }
 function playVOTeam2WinningRule(conditionState: any) {
     let newState = shouldPlayVOTeam2Winning();
@@ -1367,13 +1365,13 @@ function playVOTeam2WinningRule(conditionState: any) {
 }
 
 function shouldPlayVOLowTickets(): boolean {
-    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.LessThanEqualTo(getTeamState(TEAM_1).score, mod.GetVariable(LowTicketMusicGlobalVar));
+    const newState = isGameOngoing && FLAGS.ENABLE_VO && mod.LessThanEqualTo(getTeamState(TEAM_1).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD);
     return newState;
 }
 
 function playVOLowTickets() {
-    mod.PlayVO(mod.GetVariable(VO5GlobalVar), mod.VoiceOverEvents2D.PlayerCountFriendlyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
-    mod.PlayVO(mod.GetVariable(VO6GlobalVar), mod.VoiceOverEvents2D.PlayerCountEnemyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
+    mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.PlayerCountFriendlyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
+    mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.PlayerCountEnemyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
 }
 function playVOLowTicketsRule(conditionState: any) {
     let newState = shouldPlayVOLowTickets();
@@ -1384,13 +1382,13 @@ function playVOLowTicketsRule(conditionState: any) {
 }
 
 function shouldPlayVOTeam2LowTickets(): boolean {
-    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.LessThanEqualTo(getTeamState(TEAM_2).score, mod.GetVariable(LowTicketMusicGlobalVar));
+    const newState = isGameOngoing && FLAGS.ENABLE_VO && mod.LessThanEqualTo(getTeamState(TEAM_2).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD);
     return newState;
 }
 
 function playVOTeam2LowTickets() {
-    mod.PlayVO(mod.GetVariable(VO5GlobalVar), mod.VoiceOverEvents2D.PlayerCountFriendlyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
-    mod.PlayVO(mod.GetVariable(VO6GlobalVar), mod.VoiceOverEvents2D.PlayerCountEnemyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
+    mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.PlayerCountFriendlyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
+    mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.PlayerCountEnemyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
 }
 function playVOTeam2LowTicketsRule(conditionState: any) {
     let newState = shouldPlayVOTeam2LowTickets();
@@ -1401,18 +1399,14 @@ function playVOTeam2LowTicketsRule(conditionState: any) {
 }
 
 async function updateCaptureProgress(eventInfo: any) {
-    while (!mod.GetVariable(GameOngoingGlobalVar)) { await mod.Wait(999) }
-    if (mod.GetVariable(ConquestAssaultGlobalVar)) {
+    while (!isGameOngoing) { await mod.Wait(999) }
+    if (FLAGS.CONQUEST_ASSAULT) {
         mod.SetCapturePointOwner(eventInfo.eventCapturePoint, mod.GetTeam(2))
     }
     await mod.Wait(mod.RandomReal(0, 1))
-    mod.SetVariableAtIndex(CapturePointProgressGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.GetCaptureProgress(eventInfo.eventCapturePoint))
-    mod.SetVariableAtIndex(CaptureProgressSizeGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.CreateVector(mod.Floor(mod.Multiply(220, mod.GetCaptureProgress(eventInfo.eventCapturePoint))), 7, 0))
-    mod.SetVariableAtIndex(CaptureProgressPositionGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.CreateVector(mod.Add(
-        -110,
-        mod.Floor(mod.Divide(
-            mod.Multiply(220, mod.GetCaptureProgress(eventInfo.eventCapturePoint)),
-            2))), 200, 0))
+    const cpState = getCapturePointState(eventInfo.eventCapturePoint);
+    cpState.progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+    cpState.setProgressVisuals(cpState.progress);
     // TODO: make this function "async"
     while (true) {
         if (mod.And(
@@ -1422,54 +1416,50 @@ async function updateCaptureProgress(eventInfo: any) {
             mod.LessThan(
                 mod.GetCaptureProgress(eventInfo.eventCapturePoint),
                 1))) {
-            mod.SetUITextAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+            mod.SetUITextAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
-                200))), mod.GetVariable(CapturepointFlashGlobalVar))
-            mod.SetUITextAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+                200))), capturePointFlash)
+            mod.SetUITextAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
-                174))), mod.GetVariable(CapturepointFlashGlobalVar))
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+                174))), capturePointFlash)
+            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
-                148))), mod.GetVariable(CapturepointFlashGlobalVar))
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+                148))), capturePointFlash)
+            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
-                122))), mod.GetVariable(CapturepointFlashGlobalVar))
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+                122))), capturePointFlash)
+            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
-                200))), mod.GetVariable(CapturepointFlashGlobalVar))
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+                200))), capturePointFlash)
+            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
-                174))), mod.GetVariable(CapturepointFlashGlobalVar))
+                174))), capturePointFlash)
         } else {
-            mod.SetUITextAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+            mod.SetUITextAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
                 200))), 1)
-            mod.SetUITextAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+            mod.SetUITextAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
                 174))), 1)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
                 148))), 1)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
                 122))), 1)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
                 200))), 0.8)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Subtract(
+            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Subtract(
                 mod.GetObjId(eventInfo.eventCapturePoint),
                 174))), 0.8)
         }
-        if (mod.NotEqualTo(mod.ValueInArray(mod.GetVariable(CapturePointProgressGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)), mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
-            mod.SetVariableAtIndex(CaptureProgressSizeGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.CreateVector(mod.Floor(mod.Multiply(220, mod.GetCaptureProgress(eventInfo.eventCapturePoint))), 7, 0))
-            mod.SetVariableAtIndex(CaptureProgressPositionGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.CreateVector(mod.Add(
-                -110,
-                mod.Floor(mod.Divide(
-                    mod.Multiply(220, mod.GetCaptureProgress(eventInfo.eventCapturePoint)),
-                    2))), 200, 0))
-            manageCapturePointUI(eventInfo.eventCapturePoint, mod.ValueInArray(mod.GetVariable(CapturePointProgressGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)), eventInfo)
+        if (mod.NotEqualTo(getCapturePointState(eventInfo.eventCapturePoint).progress, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
+            const cpState = getCapturePointState(eventInfo.eventCapturePoint);
+            cpState.setProgressVisuals(mod.GetCaptureProgress(eventInfo.eventCapturePoint));
+            manageCapturePointUI(eventInfo.eventCapturePoint, cpState.progress, eventInfo)
         }
-        mod.SetVariableAtIndex(CapturePointProgressGlobalVar, mod.GetObjId(eventInfo.eventCapturePoint), mod.GetCaptureProgress(eventInfo.eventCapturePoint))
+        getCapturePointState(eventInfo.eventCapturePoint).progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
         await mod.Wait(0.1)
     }
 }
@@ -1482,7 +1472,7 @@ function runCaptureProgressRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAIScoutOnDeploy(eventInfo: any): boolean {
-    const newState = mod.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
+    const newState = mod.And(FLAGS.ENABLE_CUSTOM_AI, mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
     return newState;
 }
 
@@ -1502,7 +1492,7 @@ function aiScoutOnDeployRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAIFindNewObjective(eventInfo: any): boolean {
-    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
+    const newState = FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
     return newState;
 }
 
@@ -1531,7 +1521,7 @@ function aiFindNewObjectiveRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAIReadyForAttack(eventInfo: any): boolean {
-    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && mod.LessThanEqualTo(mod.GetVariable(MaxCustomAIGlobalVar), 70);
+    const newState = FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && mod.LessThanEqualTo(CONFIG.MAX_CUSTOM_AI, 70);
     return newState;
 }
 
@@ -1567,7 +1557,7 @@ function aiReadyForAttackRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAITargetDamager(eventInfo: any): boolean {
-    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !getPlayerState(eventInfo.eventPlayer).aiInAction && mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
+    const newState = FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !getPlayerState(eventInfo.eventPlayer).aiInAction && mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
     return newState;
 }
 
@@ -1593,7 +1583,7 @@ function aiTargetDamagerRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAIExitVehicle(eventInfo: any): boolean {
-    const newState = mod.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
+    const newState = mod.And(FLAGS.ENABLE_CUSTOM_AI, mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
     return newState;
 }
 
@@ -1609,7 +1599,7 @@ function aiExitVehicleRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAIEnterVehicle(eventInfo: any): boolean {
-    const newState = mod.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
+    const newState = mod.And(FLAGS.ENABLE_CUSTOM_AI, mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
     return newState;
 }
 
@@ -1637,7 +1627,7 @@ function aiEnterVehicleRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAIRetryMove(eventInfo: any): boolean {
-    const newState = mod.And(mod.GetVariable(EnableCustomAIGlobalVar), mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
+    const newState = mod.And(FLAGS.ENABLE_CUSTOM_AI, mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier));
     return newState;
 }
 
@@ -1653,7 +1643,7 @@ function aiRetryMoveRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAITargetOnKill(eventInfo: any): boolean {
-    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
+    const newState = FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
     return newState;
 }
 
@@ -1670,7 +1660,7 @@ function aiTargetOnKillRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAITargetOnKillAssist(eventInfo: any): boolean {
-    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
+    const newState = FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
     return newState;
 }
 
@@ -1754,8 +1744,8 @@ function updatePlayerScoreboard(Player: any) {
 function setupCapturePoint(Objective: any) {
 
 
-    mod.SetCapturePointCapturingTime(Objective, mod.GetVariable(FlagCaptureTimeGlobalVar))
-    mod.SetCapturePointNeutralizationTime(Objective, mod.GetVariable(FlagNeutralTimeGlobalVar))
+    mod.SetCapturePointCapturingTime(Objective, CONFIG.FLAG_CAPTURE_TIME)
+    mod.SetCapturePointNeutralizationTime(Objective, CONFIG.FLAG_NEUTRAL_TIME)
     mod.EnableGameModeObjective(Objective, true)
     mod.SetMaxCaptureMultiplier(Objective, 3)
 }
@@ -1849,7 +1839,7 @@ function processObjectivePlayerData(Player: any) {
     getPlayerState(Player).captures += 1;
     getPlayerState(Player).score += 50;
     updatePlayerScoreboard(Player)
-    mod.PlaySound(mod.GetVariable(CapturedSoundGlobalVar), 0.7, Player)
+    mod.PlaySound(audio.capturedSound!, 0.7, Player)
 }
 function initPlayerUIIds() {
     const ids: string[] = [];
@@ -1876,7 +1866,7 @@ function updateObjectiveUI(Label: string, eventInfo: any) {
             getTeamState(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0))) {
         mod.SetUITextColor(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.CreateVector(1, 1, 1))
     } else {
-        mod.SetUITextColor(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.GetVariable(EnemyTextColourGlobalVar))
+        mod.SetUITextColor(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enemyTextColour)
     }
 }
 function setupMainUI() {
@@ -1894,19 +1884,19 @@ function setupMainUI() {
             10)), mod.Floor(mod.Modulo(
                 mod.GetMatchTimeRemaining(),
                 10))), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
-    mod.AddUIText("LeftBarBG", mod.CreateVector(-160, 60, 0), mod.CreateVector(200, 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
-    mod.AddUIText("RightBarBG", mod.CreateVector(160, 60, 0), mod.CreateVector(200, 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
+    mod.AddUIText("LeftBarBG", mod.CreateVector(-160, 60, 0), mod.CreateVector(200, 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, friendlyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
+    mod.AddUIText("RightBarBG", mod.CreateVector(160, 60, 0), mod.CreateVector(200, 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, enemyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
     setupScoreUI("Team1ScoreLeft", "Team1ScoreRight", "Team1LeftBar", "Team1RightBar", mod.GetTeam(1))
     setupScoreUI("Team2ScoreLeft", "Team2ScoreRight", "Team2LeftBar", "Team2RightBar", mod.GetTeam(2))
     for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
-        mod.AddUIText(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i), mod.CreateVector(mod.Multiply(mod.Subtract(
+        mod.AddUIText(mod.ValueInArray(objectiveTrackingUI, i), mod.CreateVector(mod.Multiply(mod.Subtract(
             i,
             mod.Divide(
                 mod.Subtract(
                     mod.CountOf(mod.AllCapturePoints()),
                     1),
-                2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(mod.ValueInArray(mod.GetVariable(FlagLettersGlobalVar), i)), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
-        mod.AddUIText(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+                2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(mod.ValueInArray(flagLetters, i)), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
+        mod.AddUIText(mod.ValueInArray(objectiveTrackingUI, mod.Add(
             52,
             i)), mod.CreateVector(mod.Multiply(mod.Subtract(
                 i,
@@ -1915,7 +1905,7 @@ function setupMainUI() {
                         mod.CountOf(mod.AllCapturePoints()),
                         1),
                     2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.OutlineThin, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
-        mod.AddUIText(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+        mod.AddUIText(mod.ValueInArray(objectiveTrackingUI, mod.Add(
             26,
             i)), mod.CreateVector(mod.Multiply(mod.Subtract(
                 i,
@@ -1923,8 +1913,8 @@ function setupMainUI() {
                     mod.Subtract(
                         mod.CountOf(mod.AllCapturePoints()),
                         1),
-                    2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(mod.ValueInArray(mod.GetVariable(FlagLettersGlobalVar), i)), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
-        mod.AddUIText(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+                    2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(mod.ValueInArray(flagLetters, i)), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
+        mod.AddUIText(mod.ValueInArray(objectiveTrackingUI, mod.Add(
             78,
             i)), mod.CreateVector(mod.Multiply(mod.Subtract(
                 i,
@@ -1934,10 +1924,10 @@ function setupMainUI() {
                         1),
                     2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.OutlineThin, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
     }
-    mod.AddUIText("LeftFlash1", mod.GetVariable(ScorePositionLeftGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyTextColourGlobalVar), 0, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
-    mod.AddUIText("RightFlash1", mod.GetVariable(ScorePositionRightGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyTextColourGlobalVar), 0, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
-    mod.AddUIText("LeftFlash2", mod.GetVariable(ScorePositionLeftGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyTextColourGlobalVar), 0, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
-    mod.AddUIText("RightFlash2", mod.GetVariable(ScorePositionRightGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyTextColourGlobalVar), 0, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
+    mod.AddUIText("LeftFlash1", scorePositionLeft, mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, friendlyTextColour, 0, mod.UIBgFill.Solid, mod.Message(""), 32, friendlyTextColour, 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
+    mod.AddUIText("RightFlash1", scorePositionRight, mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, enemyTextColour, 0, mod.UIBgFill.Solid, mod.Message(""), 32, enemyTextColour, 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
+    mod.AddUIText("LeftFlash2", scorePositionLeft, mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, friendlyTextColour, 0, mod.UIBgFill.Solid, mod.Message(""), 32, friendlyTextColour, 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
+    mod.AddUIText("RightFlash2", scorePositionRight, mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, enemyTextColour, 0, mod.UIBgFill.Solid, mod.Message(""), 32, enemyTextColour, 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
 }
 function showEndGameUI(UI: string, Position: any) {
 
@@ -1949,8 +1939,8 @@ function showEndGameUI(UI: string, Position: any) {
 function setupScoreUI(LeftScore: string, RightScore: string, LeftBar: string, RightBar: string, Team: any) {
 
 
-    mod.AddUIText(LeftScore, mod.GetVariable(ScorePositionLeftGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("{}", getTeamState(Team).score), 32, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
-    mod.AddUIText(RightScore, mod.GetVariable(ScorePositionRightGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("{}", getTeamState(getTeamState(Team).otherTeam).score), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
+    mod.AddUIText(LeftScore, scorePositionLeft, mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, friendlyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message("{}", getTeamState(Team).score), 32, friendlyTextColour, 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
+    mod.AddUIText(RightScore, scorePositionRight, mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, enemyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message("{}", getTeamState(getTeamState(Team).otherTeam).score), 32, enemyTextColour, 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
     mod.AddUIText(LeftBar, mod.CreateVector(mod.Add(
         -260,
         mod.Divide(
@@ -1959,7 +1949,7 @@ function setupScoreUI(LeftScore: string, RightScore: string, LeftBar: string, Ri
                 getTeamState(Team).startingScore)),
             2)), 60, 0), mod.CreateVector(mod.Multiply(200, mod.Divide(
                 getTeamState(Team).score,
-                getTeamState(Team).startingScore)), 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
+                getTeamState(Team).startingScore)), 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, friendlyTextColour, 1, mod.UIBgFill.Solid, mod.Message(""), 32, friendlyTextColour, 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
     mod.AddUIText(RightBar, mod.CreateVector(mod.Subtract(
         260,
         mod.Divide(
@@ -1968,39 +1958,29 @@ function setupScoreUI(LeftScore: string, RightScore: string, LeftBar: string, Ri
                 getTeamState(getTeamState(Team).otherTeam).startingScore)),
             2)), 60, 0), mod.CreateVector(mod.Multiply(200, mod.Divide(
                 getTeamState(getTeamState(Team).otherTeam).score,
-                getTeamState(getTeamState(Team).otherTeam).startingScore)), 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
+                getTeamState(getTeamState(Team).otherTeam).startingScore)), 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, enemyTextColour, 1, mod.UIBgFill.Solid, mod.Message(""), 32, enemyTextColour, 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
 }
 function initObjectiveLetters() {
-    const letters: string[] = [];
+    flagLetters = mod.EmptyArray();
     for (let i = 0; i < 26; i++) {
-        letters.push(String.fromCharCode(65 + i));
+        flagLetters = mod.AppendToArray(flagLetters, String.fromCharCode(65 + i));
     }
-    let arr = mod.EmptyArray();
-    for (const letter of letters) {
-        arr = mod.AppendToArray(arr, letter);
-    }
-    mod.SetVariable(FlagLettersGlobalVar, arr);
 }
 function initObjectiveTeamUI() {
-    const items: string[] = [];
+    objectiveTrackingUI = mod.EmptyArray();
     for (let suffix = 1; suffix <= 4; suffix++) {
         for (let i = 0; i < 26; i++) {
-            items.push(String.fromCharCode(65 + i) + suffix);
+            objectiveTrackingUI = mod.AppendToArray(objectiveTrackingUI, String.fromCharCode(65 + i) + suffix);
         }
     }
-    let arr = mod.EmptyArray();
-    for (const item of items) {
-        arr = mod.AppendToArray(arr, item);
-    }
-    mod.SetVariable(ObjectiveTrackingUIGlobalVar, arr);
 }
 function addAI() {
-
-
-    if (mod.GetVariable(EnableCustomAIGlobalVar)) {
+    if (FLAGS.ENABLE_CUSTOM_AI) {
         if (mod.LessThan(
             mod.CountOf(mod.AllPlayers()),
-            mod.GetVariable(MaxCustomAIGlobalVar))) {
+            CONFIG.MAX_CUSTOM_AI)) {
+            const botNameCount = mod.CountOf(botNames);
+            if (botNameCount <= 0) return;
             if (mod.GreaterThan(
                 mod.CountOf(filterModArray(
                     mod.AllPlayers(),
@@ -2012,15 +1992,11 @@ function addAI() {
                     (currentArrayElement: any) => mod.Equals(
                         mod.GetTeam(currentArrayElement),
                         mod.GetTeam(2)))))) {
-                mod.SpawnAIFromAISpawner(mod.GetSpawner(902), mod.Message(mod.ValueInArray(mod.GetVariable(BotNamesGlobalVar), botNameIndex)), mod.GetTeam(2))
+                mod.SpawnAIFromAISpawner(mod.GetSpawner(902), mod.Message(mod.ValueInArray(botNames, botNameIndex)), mod.GetTeam(2))
             } else {
-                mod.SpawnAIFromAISpawner(mod.GetSpawner(901), mod.Message(mod.ValueInArray(mod.GetVariable(BotNamesGlobalVar), botNameIndex)), mod.GetTeam(1))
+                mod.SpawnAIFromAISpawner(mod.GetSpawner(901), mod.Message(mod.ValueInArray(botNames, botNameIndex)), mod.GetTeam(1))
             }
-            const botNameCount = mod.CountOf(mod.GetVariable(BotNamesGlobalVar));
-            if (botNameCount > 0) {
-                botNameIndex = (botNameIndex + 1) % botNameCount;
-            }
-        } else {
+            botNameIndex = (botNameIndex + 1) % botNameCount;
         }
     }
 }
@@ -2094,11 +2070,10 @@ function initBotNames() {
         "SgtHamster (Bot)",
         "LoganTheBrawler (Bot)",
     ];
-    let arr = mod.EmptyArray();
+    botNames = mod.EmptyArray();
     for (const name of names) {
-        arr = mod.AppendToArray(arr, name);
+        botNames = mod.AppendToArray(botNames, name);
     }
-    mod.SetVariable(BotNamesGlobalVar, arr);
 }
 function spawnAIObjectives(eventInfo: any) {
 
@@ -2120,7 +2095,7 @@ function spawnAIObjectives(eventInfo: any) {
             mod.CountOf(getPlayerState(eventInfo.eventPlayer).aiSpawnPoints),
             0)) {
             if (mod.And(
-                mod.GetVariable(ConquestAssaultGlobalVar),
+                FLAGS.CONQUEST_ASSAULT,
                 mod.Equals(
                     mod.GetTeam(2),
                     mod.GetTeam(eventInfo.eventPlayer)))) {
@@ -2143,7 +2118,7 @@ function spawnAIObjectives(eventInfo: any) {
             }
         } else {
             if (mod.And(
-                mod.GetVariable(ConquestAssaultGlobalVar),
+                FLAGS.CONQUEST_ASSAULT,
                 mod.Equals(
                     mod.GetTeam(2),
                     mod.GetTeam(eventInfo.eventPlayer)))) {
@@ -2153,17 +2128,16 @@ function spawnAIObjectives(eventInfo: any) {
     }
 }
 function initFlagCalls() {
-    let arr = mod.EmptyArray();
-    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Alpha);
-    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Bravo);
-    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Charlie);
-    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Delta);
-    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Echo);
-    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Foxtrot);
-    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Golf);
-    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.Hotel);
-    arr = mod.AppendToArray(arr, mod.VoiceOverFlags.India);
-    mod.SetVariable(FlagAnnounceGlobalVar, arr);
+    flagAnnounce = mod.EmptyArray();
+    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Alpha);
+    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Bravo);
+    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Charlie);
+    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Delta);
+    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Echo);
+    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Foxtrot);
+    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Golf);
+    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Hotel);
+    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.India);
 }
 async function animateUIFlash(Team1UI: string, Team2UI: string) {
 
@@ -2212,7 +2186,7 @@ async function handleOutOfBounds(eventInfo: any) {
         for (let CaptureTickVar = 10; CaptureTickVar < 0; CaptureTickVar += -1) {
             getPlayerState(eventInfo.eventPlayer).captureTick = CaptureTickVar;;
             mod.SetUITextLabel(mod.FindUIWidgetWithName("OOBCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.Message("{}", getPlayerState(eventInfo.eventPlayer).captureTick))
-            mod.PlaySound(mod.GetVariable(OOBSoundGlobalVar), 0.7, eventInfo.eventPlayer)
+            mod.PlaySound(audio.oobSound!, 0.7, eventInfo.eventPlayer)
             while (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) { await mod.Wait(1) }
             if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
                 break
@@ -2289,52 +2263,52 @@ function updateFlagIcons() {
                 200,
                 i))),
             mod.GetTeam(1))) {
-            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.GetVariable(FriendlyTextColourGlobalVar))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.GetVariable(FriendlyBGColourGlobalVar))
-            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, i)), friendlyTextColour)
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, i)), friendlyBGColour)
+            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
-                26))), mod.GetVariable(EnemyTextColourGlobalVar))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+                26))), enemyTextColour)
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
-                26))), mod.GetVariable(EnemyBGColourGlobalVar))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+                26))), enemyBGColour)
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
-                52))), mod.GetVariable(FriendlyTextColourGlobalVar))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+                52))), friendlyTextColour)
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
-                78))), mod.GetVariable(EnemyTextColourGlobalVar))
+                78))), enemyTextColour)
         } else if (mod.Equals(
             mod.GetCurrentOwnerTeam(mod.GetCapturePoint(mod.Add(
                 200,
                 i))),
             mod.GetTeam(2))) {
-            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.GetVariable(EnemyTextColourGlobalVar))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.GetVariable(EnemyBGColourGlobalVar))
-            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, i)), enemyTextColour)
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, i)), enemyBGColour)
+            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
-                26))), mod.GetVariable(FriendlyTextColourGlobalVar))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+                26))), friendlyTextColour)
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
-                26))), mod.GetVariable(FriendlyBGColourGlobalVar))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+                26))), friendlyBGColour)
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
-                52))), mod.GetVariable(EnemyTextColourGlobalVar))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+                52))), enemyTextColour)
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
-                78))), mod.GetVariable(FriendlyTextColourGlobalVar))
+                78))), friendlyTextColour)
         } else {
-            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.CreateVector(0.9, 0.9, 0.9))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), i)), mod.CreateVector(0, 0, 0))
-            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, i)), mod.CreateVector(0.9, 0.9, 0.9))
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, i)), mod.CreateVector(0, 0, 0))
+            mod.SetUITextColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
                 26))), mod.CreateVector(0.9, 0.9, 0.9))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
                 26))), mod.CreateVector(0, 0, 0))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
                 52))), mod.CreateVector(0.9, 0.9, 0.9))
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(mod.GetVariable(ObjectiveTrackingUIGlobalVar), mod.Add(
+            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(mod.ValueInArray(objectiveTrackingUI, mod.Add(
                 i,
                 78))), mod.CreateVector(0.9, 0.9, 0.9))
         }
@@ -2348,17 +2322,17 @@ function showVersion() {
 function updatePlayerCaptureUI(eventInfo: any) {
 
 
-    mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.ValueInArray(mod.GetVariable(CaptureProgressPositionGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)))
-    mod.SetUIWidgetSize(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.ValueInArray(mod.GetVariable(CaptureProgressSizeGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)))
+    mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getCapturePointState(eventInfo.eventCapturePoint).uiPosition)
+    mod.SetUIWidgetSize(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getCapturePointState(eventInfo.eventCapturePoint).uiSize)
     mod.SetUITextColor(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capTextColour(mod.GetObjId(eventInfo.eventCapturePoint)))
     mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capBGColour(mod.GetObjId(eventInfo.eventCapturePoint)))
     mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgressBG", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capProgressColour(mod.GetObjId(eventInfo.eventCapturePoint)))
     if (mod.Equals(
         mod.GetTeam(eventInfo.eventPlayer),
         mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))) {
-        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.GetVariable(FriendlyTextColourGlobalVar))
+        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), friendlyTextColour)
     } else {
-        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.GetVariable(EnemyTextColourGlobalVar))
+        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enemyTextColour)
     }
     updateObjectiveUI(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capMessage(mod.GetObjId(eventInfo.eventCapturePoint)), eventInfo)
     if (mod.NotEqualTo(getPlayerState(eventInfo.eventPlayer).capturePointState, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
@@ -2374,17 +2348,17 @@ function updatePlayerCaptureUI(eventInfo: any) {
                 if (mod.Equals(
                     mod.GetTeam(eventInfo.eventPlayer),
                     mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))) {
-                    mod.PlaySound(mod.GetVariable(TickSoundTakingGlobalVar), 0.5, eventInfo.eventPlayer)
+                    mod.PlaySound(audio.tickSoundTaking!, 0.5, eventInfo.eventPlayer)
                 } else {
-                    mod.PlaySound(mod.GetVariable(TickSoundLosingGlobalVar), 0.5, eventInfo.eventPlayer)
+                    mod.PlaySound(audio.tickSoundLosing!, 0.5, eventInfo.eventPlayer)
                 }
             } else {
                 if (mod.Equals(
                     mod.GetTeam(eventInfo.eventPlayer),
                     mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))) {
-                    mod.PlaySound(mod.GetVariable(TickSoundLosingGlobalVar), 0.5, eventInfo.eventPlayer)
+                    mod.PlaySound(audio.tickSoundLosing!, 0.5, eventInfo.eventPlayer)
                 } else {
-                    mod.PlaySound(mod.GetVariable(TickSoundTakingGlobalVar), 0.5, eventInfo.eventPlayer)
+                    mod.PlaySound(audio.tickSoundTaking!, 0.5, eventInfo.eventPlayer)
                 }
             }
         }
@@ -2436,8 +2410,8 @@ function setupPlayerUI(eventInfo: any) {
     mod.AddUIContainer("ObjProgressBG", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, eventInfo.eventPlayer)
     mod.AddUIContainer("ObjProgress", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.Solid, eventInfo.eventPlayer)
     mod.AddUIText("OOBBackground", mod.CreateVector(0, 0, 0), mod.CreateVector(5000, 5000, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.9, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, eventInfo.eventPlayer)
-    mod.AddUIText("OOBText", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.GetVariable(EnemyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("Return To Combat"), 56, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.TopCenter, eventInfo.eventPlayer)
-    mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", getPlayerState(eventInfo.eventPlayer).captureTick), 72, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.BottomCenter, eventInfo.eventPlayer)
+    mod.AddUIText("OOBText", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, enemyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message("Return To Combat"), 56, enemyTextColour, 1, mod.UIAnchor.TopCenter, eventInfo.eventPlayer)
+    mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", getPlayerState(eventInfo.eventPlayer).captureTick), 72, enemyTextColour, 1, mod.UIAnchor.BottomCenter, eventInfo.eventPlayer)
 }
 function manageCapturePointUI(Flag: any, OldProggress: number, eventInfo: any) {
 
@@ -2445,17 +2419,17 @@ function manageCapturePointUI(Flag: any, OldProggress: number, eventInfo: any) {
     if (mod.Equals(
         mod.GetCurrentOwnerTeam(Flag),
         mod.GetTeam(1))) {
-        getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(Flag), mod.GetVariable(FriendlyTextColourGlobalVar))
-        getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(Flag), mod.GetVariable(FriendlyBGColourGlobalVar))
-        getTeamState(TEAM_2).capTextColours.set(mod.GetObjId(Flag), mod.GetVariable(EnemyTextColourGlobalVar))
-        getTeamState(TEAM_2).capBGColours.set(mod.GetObjId(Flag), mod.GetVariable(EnemyBGColourGlobalVar))
+        getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(Flag), friendlyTextColour)
+        getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(Flag), friendlyBGColour)
+        getTeamState(TEAM_2).capTextColours.set(mod.GetObjId(Flag), enemyTextColour)
+        getTeamState(TEAM_2).capBGColours.set(mod.GetObjId(Flag), enemyBGColour)
     } else if (mod.Equals(
         mod.GetCurrentOwnerTeam(Flag),
         mod.GetTeam(2))) {
-        getTeamState(TEAM_2).capTextColours.set(mod.GetObjId(Flag), mod.GetVariable(FriendlyTextColourGlobalVar))
-        getTeamState(TEAM_2).capBGColours.set(mod.GetObjId(Flag), mod.GetVariable(FriendlyBGColourGlobalVar))
-        getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(Flag), mod.GetVariable(EnemyTextColourGlobalVar))
-        getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(Flag), mod.GetVariable(EnemyBGColourGlobalVar))
+        getTeamState(TEAM_2).capTextColours.set(mod.GetObjId(Flag), friendlyTextColour)
+        getTeamState(TEAM_2).capBGColours.set(mod.GetObjId(Flag), friendlyBGColour)
+        getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(Flag), enemyTextColour)
+        getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(Flag), enemyBGColour)
     } else {
         getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(Flag), mod.CreateVector(1, 1, 1))
         getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(Flag), mod.CreateVector(0, 0, 0))
@@ -2546,10 +2520,10 @@ async function applyRepelForce(Time: number, eventInfo: any) {
 async function resetFX(eventInfo: any) {
 
 
-    while (mod.GetVariable(resetFXingGlobalVar)) {
+    while (isFXResetting) {
         await mod.Wait(1)
     }
-    mod.SetVariable(resetFXingGlobalVar, true)
+    isFXResetting = true;
     for (let i = 2000; i < 2999; i++) {
         mod.EnableVFX(mod.GetVFX(i), false)
         mod.EnableVFX(mod.GetVFX(i), true)
@@ -2561,7 +2535,7 @@ async function resetFX(eventInfo: any) {
             await mod.Wait(0.066)
         }
     }
-    mod.SetVariable(resetFXingGlobalVar, false)
+    isFXResetting = false;
 }
 async function deployAI(eventInfo: any) {
 
@@ -2588,7 +2562,7 @@ async function deployAI(eventInfo: any) {
 }
 function checkConquestAssaultWin() {
 
-    const newState = mod.GetVariable(ConquestAssaultGlobalVar) && mod.GreaterThan(
+    const newState = FLAGS.CONQUEST_ASSAULT && mod.GreaterThan(
         mod.GetMatchTimeElapsed(),
         10) && mod.Equals(
             mod.CountOf(filterModArray(
