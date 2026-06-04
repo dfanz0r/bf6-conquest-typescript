@@ -97,7 +97,7 @@ class PlayerState {
 
     aiTarget: mod.Player | mod.CapturePoint | null = null;
     aiInAction = false;
-    aiSpawnPoints: mod.CapturePoint[] = [];
+    aiSpawnPoints: mod.Array = mod.EmptyArray();
     startPosition: mod.Vector | null = null;
 }
 
@@ -461,16 +461,16 @@ function initGameSettings() {
     mod.SetVariable(BF4_ColourFilterGlobalVar, false)
     mod.SetVariable(GivePlayersNVGGlobalVar, false)
     mod.SetVariable(ConquestAssaultGlobalVar, false)
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), StartingScoreTeamVar), 2000)
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), StartingScoreTeamVar), 1500)
+    getTeamState(TEAM_1).startingScore = 2000;
+    getTeamState(TEAM_2).startingScore = 1500;
     if (mod.Not(mod.GetVariable(ConquestAssaultGlobalVar))) {
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), StartingScoreTeamVar), mod.GetVariable(StartingScoreGlobalVar))
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), StartingScoreTeamVar), mod.GetVariable(StartingScoreGlobalVar))
+        getTeamState(TEAM_1).startingScore = mod.GetVariable(StartingScoreGlobalVar);
+        getTeamState(TEAM_2).startingScore = mod.GetVariable(StartingScoreGlobalVar);
     }
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar), mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), StartingScoreTeamVar)))
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), StartingScoreTeamVar)))
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), OtherTeamTeamVar), mod.GetTeam(2))
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), OtherTeamTeamVar), mod.GetTeam(1))
+    getTeamState(TEAM_1).score = getTeamState(TEAM_1).startingScore;
+    getTeamState(TEAM_2).score = getTeamState(TEAM_2).startingScore;
+    getTeamState(TEAM_1).otherTeam = mod.GetTeam(2);
+    getTeamState(TEAM_2).otherTeam = mod.GetTeam(1);
     mod.SetVariable(ScorePositionLeftGlobalVar, mod.CreateVector(-315, 45, 0))
     mod.SetVariable(ScorePositionRightGlobalVar, mod.CreateVector(315, 45, 0))
     mod.SetVariable(FriendlyTextColourGlobalVar, mod.CreateVector(0, 0.8, 1))
@@ -480,16 +480,16 @@ function initGameSettings() {
     mod.SetVariable(resetFXingGlobalVar, false)
     mod.SetVariable(CapturePointProgressGlobalVar, mod.EmptyArray())
     mod.SetVariable(UniqueUI_ID_UsedGlobalVar, mod.EmptyArray())
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), PlayersOnPointTeamVar), mod.EmptyArray())
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), PlayersOnPointTeamVar), mod.EmptyArray())
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), Cap_TextColourTeamVar), mod.EmptyArray())
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), Cap_TextColourTeamVar), mod.EmptyArray())
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), Cap_BGColourTeamVar), mod.EmptyArray())
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), Cap_BGColourTeamVar), mod.EmptyArray())
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), Cap_MessageTeamVar), mod.EmptyArray())
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), Cap_MessageTeamVar), mod.EmptyArray())
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), Cap_ProgressTeamVar), mod.EmptyArray())
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), Cap_ProgressTeamVar), mod.EmptyArray())
+    // PlayersOnPoint is now a Map, initialized in TeamState constructor
+    // PlayersOnPoint is now a Map, initialized in TeamState constructor
+    // Cap_TextColour is now a Map, initialized in TeamState constructor
+    // Cap_TextColour is now a Map, initialized in TeamState constructor
+    // Cap_BGColour is now a Map, initialized in TeamState constructor
+    // Cap_BGColour is now a Map, initialized in TeamState constructor
+    // Cap_Message is now a Map, initialized in TeamState constructor
+    // Cap_Message is now a Map, initialized in TeamState constructor
+    // Cap_Progress is now a Map, initialized in TeamState constructor
+    // Cap_Progress is now a Map, initialized in TeamState constructor
     mod.SetVariable(CaptureProgressSizeGlobalVar, mod.EmptyArray())
     mod.SetVariable(CaptureProgressPositionGlobalVar, mod.EmptyArray())
     initPlayerUIIds()
@@ -511,14 +511,14 @@ async function setupMap() {
     mod.SetGameModeTargetScore(1)
     mod.SetVehicleCategoryAllowedInSurroundingArea(mod.VehicleCategories.Air_All, true)
     if (mod.IsFaction(mod.GetTeam(1), mod.Factions.NATO)) {
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), FactionTeamVar), "NATO")
+        getTeamState(TEAM_1).faction = "NATO";
     } else {
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), FactionTeamVar), "PAX")
+        getTeamState(TEAM_1).faction = "PAX";
     }
     if (mod.IsFaction(mod.GetTeam(2), mod.Factions.NATO)) {
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), FactionTeamVar), "NATO")
+        getTeamState(TEAM_2).faction = "NATO";
     } else {
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), FactionTeamVar), "PAX")
+        getTeamState(TEAM_2).faction = "PAX";
     }
     setupMainUI()
     updateScoreboard()
@@ -649,15 +649,11 @@ function trackScoreAndBleed() {
         if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
             mod.GetCurrentOwnerTeam(currentArrayElement),
             mod.GetTeam(1)))) {
-            mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), mod.Subtract(
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
-                mod.GetVariable(TotalControlBonusGlobalVar)))
+            getTeamState(TEAM_2).score -= mod.GetVariable(TotalControlBonusGlobalVar);
         } else if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
             mod.GetCurrentOwnerTeam(currentArrayElement),
             mod.GetTeam(2)))) {
-            mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar), mod.Subtract(
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
-                mod.GetVariable(TotalControlBonusGlobalVar)))
+            getTeamState(TEAM_1).score -= mod.GetVariable(TotalControlBonusGlobalVar);
         } else {
         }
     }
@@ -673,8 +669,7 @@ function trackScoreAndBleed() {
                 (currentArrayElement: any) => mod.Equals(
                     mod.GetCurrentOwnerTeam(currentArrayElement),
                     mod.GetTeam(1)))))) {
-            mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar), mod.Subtract(
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
+            getTeamState(TEAM_1).score -=
                 mod.Subtract(
                     mod.CountOf(filterModArray(
                         mod.AllCapturePoints(),
@@ -685,7 +680,7 @@ function trackScoreAndBleed() {
                         mod.AllCapturePoints(),
                         (currentArrayElement: any) => mod.Equals(
                             mod.GetCurrentOwnerTeam(currentArrayElement),
-                            mod.GetTeam(1)))))))
+                            mod.GetTeam(1)))));
             updateScoreboard()
             animateUIFlash("LeftFlash1", "RightFlash2")
         }
@@ -700,8 +695,7 @@ function trackScoreAndBleed() {
                 (currentArrayElement: any) => mod.Equals(
                     mod.GetCurrentOwnerTeam(currentArrayElement),
                     mod.GetTeam(2)))))) {
-            mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), mod.Subtract(
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
+            getTeamState(TEAM_2).score -=
                 mod.Subtract(
                     mod.CountOf(filterModArray(
                         mod.AllCapturePoints(),
@@ -712,25 +706,23 @@ function trackScoreAndBleed() {
                         mod.AllCapturePoints(),
                         (currentArrayElement: any) => mod.Equals(
                             mod.GetCurrentOwnerTeam(currentArrayElement),
-                            mod.GetTeam(2)))))))
+                            mod.GetTeam(2)))));
             updateScoreboard()
             animateUIFlash("RightFlash1", "LeftFlash2")
         }
     } else {
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar), mod.Subtract(
-            mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
+        getTeamState(TEAM_1).score -=
             mod.CountOf(filterModArray(
                 mod.AllCapturePoints(),
                 (currentArrayElement: any) => mod.Equals(
                     mod.GetCurrentOwnerTeam(currentArrayElement),
-                    mod.GetTeam(2))))))
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), mod.Subtract(
-            mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
+                    mod.GetTeam(2))));
+        getTeamState(TEAM_2).score -=
             mod.CountOf(filterModArray(
                 mod.AllCapturePoints(),
                 (currentArrayElement: any) => mod.Equals(
                     mod.GetCurrentOwnerTeam(currentArrayElement),
-                    mod.GetTeam(1))))))
+                    mod.GetTeam(1))));
     }
 }
 function trackScoreRule(conditionState: any) {
@@ -747,15 +739,9 @@ function shouldProcessKill(eventInfo: any): boolean {
 }
 
 function processKill(eventInfo: any) {
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, ScorePlayerVar), mod.Add(
-        mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, ScorePlayerVar)),
-        10))
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, ScorePlayerVar), mod.Add(
-        mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, ScorePlayerVar)),
-        10))
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerKillsPlayerVar), mod.Add(
-        mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerKillsPlayerVar)),
-        1))
+    getPlayerState(eventInfo.eventPlayer).score += 10;
+    getPlayerState(eventInfo.eventPlayer).score += 10;
+    getPlayerState(eventInfo.eventPlayer).kills += 1;
     updatePlayerScoreboard(eventInfo.eventPlayer)
 }
 function processKillRule(conditionState: any, eventInfo: any) {
@@ -772,12 +758,8 @@ function shouldProcessAssist(eventInfo: any): boolean {
 }
 
 function processAssist(eventInfo: any) {
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, ScorePlayerVar), mod.Add(
-        mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, ScorePlayerVar)),
-        5))
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, KillAssistsPlayerVar), mod.Add(
-        mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, KillAssistsPlayerVar)),
-        1))
+    getPlayerState(eventInfo.eventPlayer).score += 5;
+    getPlayerState(eventInfo.eventPlayer).assists += 1;
     updatePlayerScoreboard(eventInfo.eventPlayer)
 }
 function processAssistRule(conditionState: any, eventInfo: any) {
@@ -789,12 +771,8 @@ function processAssistRule(conditionState: any, eventInfo: any) {
 }
 
 function processRevive(eventInfo: any) {
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventOtherPlayer, ScorePlayerVar), mod.Add(
-        mod.GetVariable(mod.ObjectVariable(eventInfo.eventOtherPlayer, ScorePlayerVar)),
-        10))
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventOtherPlayer, RevivesPlayerVar), mod.Add(
-        mod.GetVariable(mod.ObjectVariable(eventInfo.eventOtherPlayer, RevivesPlayerVar)),
-        1))
+    getPlayerState(eventInfo.eventOtherPlayer).score += 10;
+    getPlayerState(eventInfo.eventOtherPlayer).revives += 1;
     updatePlayerScoreboard(eventInfo.eventOtherPlayer)
 }
 function processReviveRule(conditionState: any, eventInfo: any) {
@@ -807,7 +785,7 @@ function processReviveRule(conditionState: any, eventInfo: any) {
 
 async function handlePlayerDeath(eventInfo: any) {
     await mod.Wait(0.1)
-    if (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar))) {
+    if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
         disableOutOfBounds(eventInfo)
     }
     if (mod.GetVariable(EnableCustomAIGlobalVar)) {
@@ -816,13 +794,9 @@ async function handlePlayerDeath(eventInfo: any) {
                 if (mod.And(
                     mod.GetVariable(PlayerDeathsBleedGlobalVar),
                     mod.NotEqualTo(eventInfo.eventPlayer, eventInfo.eventOtherPlayer))) {
-                    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), TeamScoreTeamVar), mod.Subtract(
-                        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), TeamScoreTeamVar)),
-                        1))
+                    getTeamState(mod.GetTeam(eventInfo.eventPlayer)).score -= 1;
                 }
-                mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar), mod.Add(
-                    mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar)),
-                    1))
+                getPlayerState(eventInfo.eventPlayer).deaths += 1;
                 updatePlayerScoreboard(eventInfo.eventPlayer)
                 if (mod.GreaterThan(
                     mod.DistanceBetween(
@@ -860,11 +834,11 @@ function addEquipmentRule(conditionState: any, eventInfo: any) {
 }
 
 async function handlePlayerJoin(eventInfo: any) {
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), -1)
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar), false)
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar), false)
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, IgnoreOOBPlayerVar), false)
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar), false)
+    getPlayerState(eventInfo.eventPlayer).captureTick = -1;
+    getPlayerState(eventInfo.eventPlayer).isOnPoint = false;
+    getPlayerState(eventInfo.eventPlayer).isOutOfBounds = false;
+    getPlayerState(eventInfo.eventPlayer).ignoreOOB = false;
+    getPlayerState(eventInfo.eventPlayer).aiInAction = false;
     await mod.Wait(1)
     if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
         updatePlayerScoreboard(eventInfo.eventPlayer)
@@ -894,14 +868,10 @@ function shouldUpdateDeathOnUndeploy(eventInfo: any): boolean {
 
 function updateDeathOnUndeploy(eventInfo: any) {
     if (mod.GetVariable(PlayerDeathsBleedGlobalVar)) {
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), TeamScoreTeamVar), mod.Subtract(
-            mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), TeamScoreTeamVar)),
-            1))
+        getTeamState(mod.GetTeam(eventInfo.eventPlayer)).score -= 1;
     }
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar), mod.Add(
-        mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar)),
-        1))
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar), false)
+    getPlayerState(eventInfo.eventPlayer).deaths += 1;
+    getPlayerState(eventInfo.eventPlayer).isOnPoint = false;
     updatePlayerScoreboard(eventInfo.eventPlayer)
     updateScoreboard()
 }
@@ -936,7 +906,7 @@ async function handleCapturePointCaptured(eventInfo: any) {
             200)), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))
         mod.PlayVO(mod.GetVariable(VO2GlobalVar), mod.VoiceOverEvents2D.ObjectiveCapturedEnemy, mod.ValueInArray(mod.GetVariable(FlagAnnounceGlobalVar), mod.Subtract(
             mod.GetObjId(eventInfo.eventCapturePoint),
-            200)), mod.GetVariable(mod.ObjectVariable(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint), OtherTeamTeamVar)))
+            200)), getTeamState(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)).otherTeam)
     }
 }
 function handleCapturePointCapturedRule(conditionState: any, eventInfo: any) {
@@ -983,8 +953,8 @@ function shouldPlayNearEndMusic(): boolean {
     const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Or(
         mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 60),
         mod.Or(
-            mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)), mod.GetVariable(LowTicketMusicGlobalVar)),
-            mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)), mod.GetVariable(LowTicketMusicGlobalVar)))))
+            mod.LessThanEqualTo(getTeamState(TEAM_1).score, mod.GetVariable(LowTicketMusicGlobalVar)),
+            mod.LessThanEqualTo(getTeamState(TEAM_2).score, mod.GetVariable(LowTicketMusicGlobalVar)))))
     return newState;
 }
 
@@ -1003,8 +973,8 @@ function shouldEndGame(): boolean {
     const newState = mod.And(mod.GetVariable(GameOngoingGlobalVar), mod.Or(
         mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 1),
         mod.Or(
-            mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)), 0),
-            mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)), 0))))
+            mod.LessThanEqualTo(getTeamState(TEAM_1).score, 0),
+            mod.LessThanEqualTo(getTeamState(TEAM_2).score, 0))))
     return newState;
 }
 
@@ -1012,22 +982,22 @@ async function endGame() {
     mod.SetVariable(GameOngoingGlobalVar, false)
     mod.PauseGameModeTime(true)
     if (mod.LessThan(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
+        getTeamState(TEAM_1).score,
         0)) {
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar), 0)
+        getTeamState(TEAM_1).score = 0;
     }
     if (mod.LessThan(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
+        getTeamState(TEAM_2).score,
         0)) {
-        mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), 0)
+        getTeamState(TEAM_2).score = 0;
     }
     if (mod.GreaterThan(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)))) {
+        getTeamState(TEAM_1).score,
+        getTeamState(TEAM_2).score)) {
         mod.SetMusicParam(mod.MusicParams.Core_IsWinning, 1, mod.GetTeam(1))
     } else if (mod.GreaterThan(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)))) {
+        getTeamState(TEAM_2).score,
+        getTeamState(TEAM_1).score)) {
         mod.SetMusicParam(mod.MusicParams.Core_IsWinning, 1, mod.GetTeam(2))
     } else {
     }
@@ -1053,12 +1023,12 @@ async function endGame() {
     showEndGameUI("Team2ScoreRight", mod.GetVariable(ScorePositionRightGlobalVar))
     await mod.Wait(4)
     if (mod.GreaterThan(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)))) {
+        getTeamState(TEAM_1).score,
+        getTeamState(TEAM_2).score)) {
         mod.EndGameMode(mod.GetTeam(1))
     } else if (mod.GreaterThan(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)))) {
+        getTeamState(TEAM_2).score,
+        getTeamState(TEAM_1).score)) {
         mod.EndGameMode(mod.GetTeam(2))
     } else {
         mod.EndGameMode(mod.GetTeam(0))
@@ -1073,35 +1043,35 @@ function endGameRule(conditionState: any) {
 }
 
 function shouldShowCaptureUI(eventInfo: any): boolean {
-    const newState = mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar)));
+    const newState = mod.Not(getPlayerState(eventInfo.eventPlayer).isOnPoint);
     return newState;
 }
 
 async function showCaptureUI(eventInfo: any) {
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar), eventInfo.eventCapturePoint)
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar), mod.GetCaptureProgress(eventInfo.eventCapturePoint))
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, FlagOwnerPlayerVar), mod.GetTeam(3))
+    getPlayerState(eventInfo.eventPlayer).currentCapturePoint = eventInfo.eventCapturePoint;
+    getPlayerState(eventInfo.eventPlayer).capturePointState = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+    getPlayerState(eventInfo.eventPlayer).flagOwner = mod.GetTeam(3);
     const validPlayersOnPoint = filterModArray(
         mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
+    getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.set(mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
         validPlayersOnPoint,
         (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
             mod.Equals(
                 mod.GetTeam(currentArrayElement),
                 mod.GetTeam(eventInfo.eventPlayer)))))
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
+    getTeamState(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam).playersOnPoints.set(mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
         validPlayersOnPoint,
         (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
             mod.Equals(
                 mod.GetTeam(currentArrayElement),
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar))))))
+                getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam))))
     await mod.Wait(0.05)
-    manageCapturePointUI(eventInfo.eventCapturePoint, mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar)), eventInfo)
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar), true)
+    manageCapturePointUI(eventInfo.eventCapturePoint, getPlayerState(eventInfo.eventPlayer).capturePointState, eventInfo)
+    getPlayerState(eventInfo.eventPlayer).isOnPoint = true;
     if (mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier))) {
-        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), 9)
-        while (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar))) {
+        getPlayerState(eventInfo.eventPlayer).captureTick = 9;
+        while (getPlayerState(eventInfo.eventPlayer).isOnPoint) {
             if (mod.Not(mod.IsPlayerValid(eventInfo.eventPlayer))) {
                 break
             }
@@ -1111,11 +1081,11 @@ async function showCaptureUI(eventInfo: any) {
             } else {
                 togglePlayerCaptureUI(false, eventInfo)
             }
-            mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar), mod.GetCaptureProgress(eventInfo.eventCapturePoint))
-            mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, FlagOwnerPlayerVar), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))
-            while (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar))) { await mod.Wait(0.1) }
+            getPlayerState(eventInfo.eventPlayer).capturePointState = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+            getPlayerState(eventInfo.eventPlayer).flagOwner = mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint);
+            while (getPlayerState(eventInfo.eventPlayer).isOnPoint) { await mod.Wait(0.1) }
         }
-        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), -1)
+        getPlayerState(eventInfo.eventPlayer).captureTick = -1;
         togglePlayerCaptureUI(false, eventInfo)
     }
 }
@@ -1128,7 +1098,7 @@ function showCaptureUIRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldHideCaptureUI(eventInfo: any): boolean {
-    const newState = mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar));
+    const newState = getPlayerState(eventInfo.eventPlayer).isOnPoint;
     return newState;
 }
 
@@ -1136,13 +1106,13 @@ function hideCaptureUI(eventInfo: any) {
     const validPlayersOnPoint = filterModArray(
         mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
+    getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.set(mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
         validPlayersOnPoint,
         (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
             mod.Equals(
                 mod.GetTeam(currentArrayElement),
                 mod.GetTeam(eventInfo.eventPlayer)))))
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar), false)
+    getPlayerState(eventInfo.eventPlayer).isOnPoint = false;
 }
 function hideCaptureUIRule(conditionState: any, eventInfo: any) {
     let newState = shouldHideCaptureUI(eventInfo);
@@ -1153,16 +1123,16 @@ function hideCaptureUIRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldUpdatePlayerCountOnDeath(eventInfo: any): boolean {
-    const newState = mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar));
+    const newState = getPlayerState(eventInfo.eventPlayer).isOnPoint;
     return newState;
 }
 
 function updatePlayerCountOnDeath(eventInfo: any) {
-    const cpId = mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar)));
+    const cpId = mod.GetObjId(getPlayerState(eventInfo.eventPlayer).currentCapturePoint!);
     const validPlayersOnPoint = filterModArray(
-        mod.GetPlayersOnPoint(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))),
+        mod.GetPlayersOnPoint(getPlayerState(eventInfo.eventPlayer).currentCapturePoint!),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), cpId, mod.CountOf(filterModArray(
+    getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.set(cpId, mod.CountOf(filterModArray(
         validPlayersOnPoint,
         (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
             mod.Equals(
@@ -1178,16 +1148,16 @@ function updatePlayerCountOnDeathRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldUpdatePlayerCountOnRevive(eventInfo: any): boolean {
-    const newState = mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OnPointPlayerVar));
+    const newState = getPlayerState(eventInfo.eventPlayer).isOnPoint;
     return newState;
 }
 
 function updatePlayerCountOnRevive(eventInfo: any) {
-    const cpId = mod.GetObjId(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar)));
+    const cpId = mod.GetObjId(getPlayerState(eventInfo.eventPlayer).currentCapturePoint!);
     const validPlayersOnPoint = filterModArray(
-        mod.GetPlayersOnPoint(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointPlayerVar))),
+        mod.GetPlayersOnPoint(getPlayerState(eventInfo.eventPlayer).currentCapturePoint!),
         (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
-    mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar), cpId, mod.CountOf(filterModArray(
+    getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.set(cpId, mod.CountOf(filterModArray(
         validPlayersOnPoint,
         (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
             mod.Equals(
@@ -1211,18 +1181,14 @@ async function handleTeamSwitchAndRepel(eventInfo: any) {
             mod.Equals(
                 mod.GetInteractPoint(999),
                 eventInfo.eventInteractPoint))) {
-            mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, IgnoreOOBPlayerVar), true)
+            getPlayerState(eventInfo.eventPlayer).ignoreOOB = true;
             mod.UndeployPlayer(eventInfo.eventPlayer)
-            mod.SetTeam(eventInfo.eventPlayer, mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)))
-            mod.SetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), TeamScoreTeamVar), mod.Add(
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), TeamScoreTeamVar)),
-                1))
-            mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar), mod.Subtract(
-                mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, PlayerDeathsPlayerVar)),
-                1))
+            mod.SetTeam(eventInfo.eventPlayer, getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam)
+            getTeamState(mod.GetTeam(eventInfo.eventPlayer)).score += 1;
+            getPlayerState(eventInfo.eventPlayer).deaths -= 1;
             updatePlayerScoreboard(eventInfo.eventPlayer)
             await mod.Wait(2)
-            mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, IgnoreOOBPlayerVar), false)
+            getPlayerState(eventInfo.eventPlayer).ignoreOOB = false;
         }
     }
     if (mod.And(
@@ -1285,7 +1251,7 @@ function shouldEnterAreaTrigger(eventInfo: any): boolean {
 }
 
 function enterAreaTrigger(eventInfo: any) {
-    if (mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar)))) {
+    if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
         handleOutOfBounds(eventInfo)
     }
 }
@@ -1364,8 +1330,8 @@ function playVOLowTimeRule(conditionState: any) {
 
 function shouldPlayVOWinning(): boolean {
     const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.GreaterThan(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)));
+        getTeamState(TEAM_1).score,
+        getTeamState(TEAM_2).score);
     return newState;
 }
 
@@ -1383,8 +1349,8 @@ function playVOWinningRule(conditionState: any) {
 
 function shouldPlayVOTeam2Winning(): boolean {
     const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.GreaterThan(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)));
+        getTeamState(TEAM_2).score,
+        getTeamState(TEAM_1).score);
     return newState;
 }
 
@@ -1401,7 +1367,7 @@ function playVOTeam2WinningRule(conditionState: any) {
 }
 
 function shouldPlayVOLowTickets(): boolean {
-    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)), mod.GetVariable(LowTicketMusicGlobalVar));
+    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.LessThanEqualTo(getTeamState(TEAM_1).score, mod.GetVariable(LowTicketMusicGlobalVar));
     return newState;
 }
 
@@ -1418,7 +1384,7 @@ function playVOLowTicketsRule(conditionState: any) {
 }
 
 function shouldPlayVOTeam2LowTickets(): boolean {
-    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.LessThanEqualTo(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)), mod.GetVariable(LowTicketMusicGlobalVar));
+    const newState = mod.GetVariable(GameOngoingGlobalVar) && mod.GetVariable(EnableVOGlobalVar) && mod.LessThanEqualTo(getTeamState(TEAM_2).score, mod.GetVariable(LowTicketMusicGlobalVar));
     return newState;
 }
 
@@ -1543,12 +1509,12 @@ function shouldAIFindNewObjective(eventInfo: any): boolean {
 async function findNewAIObjective(eventInfo: any) {
     if (mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))) {
         await mod.Wait(1.5)
-        if (mod.IsType(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_TargetPlayerVar)), mod.Types.CapturePoint)) {
+        if (mod.IsType(getPlayerState(eventInfo.eventPlayer).aiTarget, mod.Types.CapturePoint)) {
             if (mod.Equals(
                 eventInfo.eventCapturePoint,
-                mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_TargetPlayerVar)))) {
+                getPlayerState(eventInfo.eventPlayer).aiTarget)) {
                 if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive)) {
-                    mod.AIDefendPositionBehavior(eventInfo.eventPlayer, mod.GetObjectPosition(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_TargetPlayerVar))), 0, 20)
+                    mod.AIDefendPositionBehavior(eventInfo.eventPlayer, mod.GetObjectPosition(getPlayerState(eventInfo.eventPlayer).aiTarget!), 0, 20)
                 }
             }
         }
@@ -1576,14 +1542,14 @@ async function readyAIForAttack(eventInfo: any) {
             if (mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle))) {
                 if (mod.LessThan(
                     mod.DistanceBetween(
-                        mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(eventInfo.eventPlayer), mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)))),
+                        mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(eventInfo.eventPlayer), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam)),
                         mod.GetObjectPosition(eventInfo.eventPlayer)),
                     25)) {
-                    mod.AIDefendPositionBehavior(eventInfo.eventPlayer, mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(eventInfo.eventPlayer), mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)))), 10, 25)
-                    mod.AISetTarget(eventInfo.eventPlayer, mod.ClosestPlayerTo(mod.GetObjectPosition(eventInfo.eventPlayer), mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar))))
+                    mod.AIDefendPositionBehavior(eventInfo.eventPlayer, mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(eventInfo.eventPlayer), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam)), 10, 25)
+                    mod.AISetTarget(eventInfo.eventPlayer, mod.ClosestPlayerTo(mod.GetObjectPosition(eventInfo.eventPlayer), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam))
                     mod.AISetMoveSpeed(eventInfo.eventPlayer, mod.MoveSpeed.InvestigateRun)
                     await mod.Wait(15)
-                    if (mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar)))) {
+                    if (mod.Not(getPlayerState(eventInfo.eventPlayer).aiInAction)) {
                         startAIScouting(eventInfo.eventPlayer)
                     }
                 }
@@ -1601,20 +1567,20 @@ function aiReadyForAttackRule(conditionState: any, eventInfo: any) {
 }
 
 function shouldAITargetDamager(eventInfo: any): boolean {
-    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar)) && mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
+    const newState = mod.GetVariable(EnableCustomAIGlobalVar) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !getPlayerState(eventInfo.eventPlayer).aiInAction && mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
     return newState;
 }
 
 async function targetAIDamager(eventInfo: any) {
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar), true)
+    getPlayerState(eventInfo.eventPlayer).aiInAction = true;
     mod.AIDefendPositionBehavior(eventInfo.eventPlayer, mod.GetObjectPosition(eventInfo.eventPlayer), 0, 15)
     mod.AISetMoveSpeed(eventInfo.eventPlayer, mod.MoveSpeed.InvestigateRun)
     mod.AISetTarget(eventInfo.eventPlayer, eventInfo.eventOtherPlayer)
     await mod.Wait(10)
     if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
-        if (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar))) {
+        if (getPlayerState(eventInfo.eventPlayer).aiInAction) {
             startAIScouting(eventInfo.eventPlayer)
-            mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar), false)
+            getPlayerState(eventInfo.eventPlayer).aiInAction = false;
         }
     }
 }
@@ -1648,14 +1614,14 @@ function shouldAIEnterVehicle(eventInfo: any): boolean {
 }
 
 async function enterAIVehicle(eventInfo: any) {
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, StartPositionPlayerVar), mod.GetObjectPosition(eventInfo.eventPlayer))
+    getPlayerState(eventInfo.eventPlayer).startPosition = mod.GetObjectPosition(eventInfo.eventPlayer);
     await mod.Wait(10)
     if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
         if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)) {
             if (mod.LessThan(
                 mod.DistanceBetween(
                     mod.GetObjectPosition(eventInfo.eventPlayer),
-                    mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, StartPositionPlayerVar))),
+                    getPlayerState(eventInfo.eventPlayer).startPosition!),
                 3)) {
                 mod.ForcePlayerExitVehicle(eventInfo.eventPlayer, mod.GetVehicleFromPlayer(eventInfo.eventPlayer))
             }
@@ -1693,7 +1659,7 @@ function shouldAITargetOnKill(eventInfo: any): boolean {
 
 function targetAIOnKill(eventInfo: any) {
     startAIScouting(eventInfo.eventPlayer)
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar), false)
+    getPlayerState(eventInfo.eventPlayer).aiInAction = false;
 }
 function aiTargetOnKillRule(conditionState: any, eventInfo: any) {
     let newState = shouldAITargetOnKill(eventInfo);
@@ -1710,7 +1676,7 @@ function shouldAITargetOnKillAssist(eventInfo: any): boolean {
 
 function targetAIOnKillAssist(eventInfo: any) {
     startAIScouting(eventInfo.eventPlayer)
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_InActionPlayerVar), false)
+    getPlayerState(eventInfo.eventPlayer).aiInAction = false;
 }
 function aiTargetOnKillAssistRule(conditionState: any, eventInfo: any) {
     let newState = shouldAITargetOnKillAssist(eventInfo);
@@ -1725,11 +1691,11 @@ function updateScoreboard() {
 
     mod.SetScoreboardType(mod.ScoreboardType.CustomTwoTeams)
     mod.SetScoreboardColumnNames(mod.Message("Score"), mod.Message("Kills"), mod.Message("Deaths"), mod.Message("Assists"), mod.Message("Captures"))
-    mod.SetScoreboardHeader(mod.Message("{}: {}", mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), FactionTeamVar)), mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar))), mod.Message("{}: {}", mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), FactionTeamVar)), mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar))))
-    mod.SetUITextLabel(mod.FindUIWidgetWithName("Team1ScoreLeft"), mod.Message("{}", mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar))))
-    mod.SetUITextLabel(mod.FindUIWidgetWithName("Team1ScoreRight"), mod.Message("{}", mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar))))
-    mod.SetUITextLabel(mod.FindUIWidgetWithName("Team2ScoreLeft"), mod.Message("{}", mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar))))
-    mod.SetUITextLabel(mod.FindUIWidgetWithName("Team2ScoreRight"), mod.Message("{}", mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar))))
+    mod.SetScoreboardHeader(mod.Message("{}: {}", getTeamState(TEAM_1).faction, getTeamState(TEAM_1).score), mod.Message("{}: {}", getTeamState(TEAM_2).faction, getTeamState(TEAM_2).score))
+    mod.SetUITextLabel(mod.FindUIWidgetWithName("Team1ScoreLeft"), mod.Message("{}", getTeamState(TEAM_1).score))
+    mod.SetUITextLabel(mod.FindUIWidgetWithName("Team1ScoreRight"), mod.Message("{}", getTeamState(TEAM_2).score))
+    mod.SetUITextLabel(mod.FindUIWidgetWithName("Team2ScoreLeft"), mod.Message("{}", getTeamState(TEAM_2).score))
+    mod.SetUITextLabel(mod.FindUIWidgetWithName("Team2ScoreRight"), mod.Message("{}", getTeamState(TEAM_1).score))
     mod.SetUITextLabel(mod.FindUIWidgetWithName("Timer"), mod.Message("{} : {}{}", mod.Floor(mod.Divide(
         mod.GetMatchTimeRemaining(),
         60)), mod.Floor(mod.Divide(
@@ -1740,50 +1706,50 @@ function updateScoreboard() {
                 mod.GetMatchTimeRemaining(),
                 10))))
     mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team1LeftBar"), mod.CreateVector(mod.Floor(mod.Multiply(200, mod.Divide(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), StartingScoreTeamVar))))), 10, 0))
+        getTeamState(TEAM_1).score,
+        getTeamState(TEAM_1).startingScore))), 10, 0))
     mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team2LeftBar"), mod.CreateVector(mod.Floor(mod.Multiply(200, mod.Divide(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), StartingScoreTeamVar))))), 10, 0))
+        getTeamState(TEAM_2).score,
+        getTeamState(TEAM_2).startingScore))), 10, 0))
     mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team1RightBar"), mod.CreateVector(mod.Floor(mod.Multiply(200, mod.Divide(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), StartingScoreTeamVar))))), 10, 0))
+        getTeamState(TEAM_2).score,
+        getTeamState(TEAM_2).startingScore))), 10, 0))
     mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team2RightBar"), mod.CreateVector(mod.Floor(mod.Multiply(200, mod.Divide(
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
-        mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), StartingScoreTeamVar))))), 10, 0))
+        getTeamState(TEAM_1).score,
+        getTeamState(TEAM_1).startingScore))), 10, 0))
     mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team1LeftBar"), mod.CreateVector(mod.Floor(mod.Add(
         -260,
         mod.Divide(
             mod.Multiply(200, mod.Divide(
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), StartingScoreTeamVar)))),
+                getTeamState(TEAM_1).score,
+                getTeamState(TEAM_1).startingScore)),
             2))), 60, 0))
     mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team1RightBar"), mod.CreateVector(mod.Floor(mod.Subtract(
         260,
         mod.Divide(
             mod.Multiply(200, mod.Divide(
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), StartingScoreTeamVar)))),
+                getTeamState(TEAM_2).score,
+                getTeamState(TEAM_2).startingScore)),
             2))), 60, 0))
     mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team2LeftBar"), mod.CreateVector(mod.Floor(mod.Add(
         -260,
         mod.Divide(
             mod.Multiply(200, mod.Divide(
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar)),
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(2), StartingScoreTeamVar)))),
+                getTeamState(TEAM_2).score,
+                getTeamState(TEAM_2).startingScore)),
             2))), 60, 0))
     mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team2RightBar"), mod.CreateVector(mod.Floor(mod.Subtract(
         260,
         mod.Divide(
             mod.Multiply(200, mod.Divide(
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), TeamScoreTeamVar)),
-                mod.GetVariable(mod.ObjectVariable(mod.GetTeam(1), StartingScoreTeamVar)))),
+                getTeamState(TEAM_1).score,
+                getTeamState(TEAM_1).startingScore)),
             2))), 60, 0))
 }
 function updatePlayerScoreboard(Player: any) {
 
 
-    mod.SetScoreboardPlayerValues(Player, mod.GetVariable(mod.ObjectVariable(Player, ScorePlayerVar)), mod.GetVariable(mod.ObjectVariable(Player, PlayerKillsPlayerVar)), mod.GetVariable(mod.ObjectVariable(Player, PlayerDeathsPlayerVar)), mod.GetVariable(mod.ObjectVariable(Player, KillAssistsPlayerVar)), mod.GetVariable(mod.ObjectVariable(Player, CapturesPlayerVar)))
+    mod.SetScoreboardPlayerValues(Player, getPlayerState(Player).score, getPlayerState(Player).kills, getPlayerState(Player).deaths, getPlayerState(Player).assists, getPlayerState(Player).captures)
 }
 function setupCapturePoint(Objective: any) {
 
@@ -1880,12 +1846,8 @@ function spawnObjectiveVehicles(eventInfo: any) {
 function processObjectivePlayerData(Player: any) {
 
 
-    mod.SetVariable(mod.ObjectVariable(Player, CapturesPlayerVar), mod.Add(
-        mod.GetVariable(mod.ObjectVariable(Player, CapturesPlayerVar)),
-        1))
-    mod.SetVariable(mod.ObjectVariable(Player, ScorePlayerVar), mod.Add(
-        mod.GetVariable(mod.ObjectVariable(Player, ScorePlayerVar)),
-        50))
+    getPlayerState(Player).captures += 1;
+    getPlayerState(Player).score += 50;
     updatePlayerScoreboard(Player)
     mod.PlaySound(mod.GetVariable(CapturedSoundGlobalVar), 0.7, Player)
 }
@@ -1903,18 +1865,18 @@ function initPlayerUIIds() {
 function updateObjectiveUI(Label: string, eventInfo: any) {
 
 
-    mod.SetUITextLabel(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.Message(Label))
-    mod.SetUITextLabel(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.Message("{} - {}", mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint)), mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)), PlayersOnPointTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint))))
+    mod.SetUITextLabel(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.Message(Label))
+    mod.SetUITextLabel(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.Message("{} - {}", getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0, getTeamState(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0))
     if (mod.Or(
         mod.Equals(
-            mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint)),
+            getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0,
             0),
         mod.GreaterThan(
-            mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), PlayersOnPointTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint)),
-            mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)), PlayersOnPointTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint))))) {
-        mod.SetUITextColor(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.CreateVector(1, 1, 1))
+            getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0,
+            getTeamState(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0))) {
+        mod.SetUITextColor(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.CreateVector(1, 1, 1))
     } else {
-        mod.SetUITextColor(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.GetVariable(EnemyTextColourGlobalVar))
+        mod.SetUITextColor(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.GetVariable(EnemyTextColourGlobalVar))
     }
 }
 function setupMainUI() {
@@ -1987,26 +1949,26 @@ function showEndGameUI(UI: string, Position: any) {
 function setupScoreUI(LeftScore: string, RightScore: string, LeftBar: string, RightBar: string, Team: any) {
 
 
-    mod.AddUIText(LeftScore, mod.GetVariable(ScorePositionLeftGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("{}", mod.GetVariable(mod.ObjectVariable(Team, TeamScoreTeamVar))), 32, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
-    mod.AddUIText(RightScore, mod.GetVariable(ScorePositionRightGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("{}", mod.GetVariable(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(Team, OtherTeamTeamVar)), TeamScoreTeamVar))), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
+    mod.AddUIText(LeftScore, mod.GetVariable(ScorePositionLeftGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("{}", getTeamState(Team).score), 32, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
+    mod.AddUIText(RightScore, mod.GetVariable(ScorePositionRightGlobalVar), mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("{}", getTeamState(getTeamState(Team).otherTeam).score), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
     mod.AddUIText(LeftBar, mod.CreateVector(mod.Add(
         -260,
         mod.Divide(
             mod.Multiply(200, mod.Divide(
-                mod.GetVariable(mod.ObjectVariable(Team, TeamScoreTeamVar)),
-                mod.GetVariable(mod.ObjectVariable(Team, StartingScoreTeamVar)))),
+                getTeamState(Team).score,
+                getTeamState(Team).startingScore)),
             2)), 60, 0), mod.CreateVector(mod.Multiply(200, mod.Divide(
-                mod.GetVariable(mod.ObjectVariable(Team, TeamScoreTeamVar)),
-                mod.GetVariable(mod.ObjectVariable(Team, StartingScoreTeamVar)))), 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
+                getTeamState(Team).score,
+                getTeamState(Team).startingScore)), 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(FriendlyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
     mod.AddUIText(RightBar, mod.CreateVector(mod.Subtract(
         260,
         mod.Divide(
             mod.Multiply(200, mod.Divide(
-                mod.GetVariable(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(Team, OtherTeamTeamVar)), TeamScoreTeamVar)),
-                mod.GetVariable(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(Team, OtherTeamTeamVar)), StartingScoreTeamVar)))),
+                getTeamState(getTeamState(Team).otherTeam).score,
+                getTeamState(getTeamState(Team).otherTeam).startingScore)),
             2)), 60, 0), mod.CreateVector(mod.Multiply(200, mod.Divide(
-                mod.GetVariable(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(Team, OtherTeamTeamVar)), TeamScoreTeamVar)),
-                mod.GetVariable(mod.ObjectVariable(mod.GetVariable(mod.ObjectVariable(Team, OtherTeamTeamVar)), StartingScoreTeamVar)))), 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
+                getTeamState(getTeamState(Team).otherTeam).score,
+                getTeamState(getTeamState(Team).otherTeam).startingScore)), 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIBgFill.Solid, mod.Message(""), 32, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, Team)
 }
 function initObjectiveLetters() {
     const letters: string[] = [];
@@ -2142,8 +2104,8 @@ function spawnAIObjectives(eventInfo: any) {
 
 
     if (mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle))) {
-        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar), mod.EmptyArray())
-        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar), filterModArray(
+        getPlayerState(eventInfo.eventPlayer).aiSpawnPoints = mod.EmptyArray();
+        getPlayerState(eventInfo.eventPlayer).aiSpawnPoints = filterModArray(
             mod.AllCapturePoints(),
             (currentArrayElement: any) => mod.And(
                 mod.Equals(
@@ -2151,18 +2113,18 @@ function spawnAIObjectives(eventInfo: any) {
                     mod.GetCurrentOwnerTeam(currentArrayElement)),
                 mod.GreaterThan(
                     mod.DistanceBetween(
-                        mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(currentArrayElement), mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), OtherTeamTeamVar)))),
+                        mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(currentArrayElement), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam)),
                         mod.GetObjectPosition(currentArrayElement)),
-                    40))))
+                    40)))
         if (mod.GreaterThan(
-            mod.CountOf(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar))),
+            mod.CountOf(getPlayerState(eventInfo.eventPlayer).aiSpawnPoints),
             0)) {
             if (mod.And(
                 mod.GetVariable(ConquestAssaultGlobalVar),
                 mod.Equals(
                     mod.GetTeam(2),
                     mod.GetTeam(eventInfo.eventPlayer)))) {
-                mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.RandomValueInArray(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar)))), 1)
+                mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.RandomValueInArray(getPlayerState(eventInfo.eventPlayer).aiSpawnPoints)), 1)
                 deployAIVehicle(mod.RandomValueInArray(filterModArray(
                     mod.AllVehicles(),
                     (currentArrayElement: any) => mod.LessThan(
@@ -2172,7 +2134,7 @@ function spawnAIObjectives(eventInfo: any) {
             if (mod.LessThan(
                 mod.RoundToInteger(mod.RandomReal(0, 5)),
                 5)) {
-                mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.RandomValueInArray(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, AI_SpawnPlayerVar)))), 1)
+                mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.RandomValueInArray(getPlayerState(eventInfo.eventPlayer).aiSpawnPoints)), 1)
                 deployAIVehicle(mod.RandomValueInArray(filterModArray(
                     mod.AllVehicles(),
                     (currentArrayElement: any) => mod.LessThan(
@@ -2226,49 +2188,49 @@ async function animateUIFlash(Team1UI: string, Team2UI: string) {
 }
 async function handleOutOfBounds(eventInfo: any) {
 
-    const newState = !mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, IgnoreOOBPlayerVar)) && !mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar)) && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive);
+    const newState = !getPlayerState(eventInfo.eventPlayer).ignoreOOB && !getPlayerState(eventInfo.eventPlayer).isOutOfBounds && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive);
     return newState;
 
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar), true)
+    getPlayerState(eventInfo.eventPlayer).isOutOfBounds = true;
     mod.SkipManDown(eventInfo.eventPlayer, true)
     if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier)) {
         for (let CaptureTickVar = 10; CaptureTickVar < 0; CaptureTickVar += -1) {
-            mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), CaptureTickVar);
-            while (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar))) { await mod.Wait(1) }
-            if (mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar)))) {
+            getPlayerState(eventInfo.eventPlayer).captureTick = CaptureTickVar;;
+            while (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) { await mod.Wait(1) }
+            if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
                 break
             }
         }
-        if (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar))) {
+        if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
             if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
                 mod.DealDamage(eventInfo.eventPlayer, 10000, eventInfo.eventPlayer)
             }
         }
-        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), -1)
+        getPlayerState(eventInfo.eventPlayer).captureTick = -1;
     } else {
         togglePlayerOOBUI(true, eventInfo)
         for (let CaptureTickVar = 10; CaptureTickVar < 0; CaptureTickVar += -1) {
-            mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), CaptureTickVar);
-            mod.SetUITextLabel(mod.FindUIWidgetWithName("OOBCounter", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.Message("{}", mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar))))
+            getPlayerState(eventInfo.eventPlayer).captureTick = CaptureTickVar;;
+            mod.SetUITextLabel(mod.FindUIWidgetWithName("OOBCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.Message("{}", getPlayerState(eventInfo.eventPlayer).captureTick))
             mod.PlaySound(mod.GetVariable(OOBSoundGlobalVar), 0.7, eventInfo.eventPlayer)
-            while (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar))) { await mod.Wait(1) }
-            if (mod.Not(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar)))) {
+            while (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) { await mod.Wait(1) }
+            if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
                 break
             }
         }
-        if (mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar))) {
+        if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
             mod.DealDamage(eventInfo.eventPlayer, 10000, eventInfo.eventPlayer)
         }
         togglePlayerOOBUI(false, eventInfo)
-        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), -1)
+        getPlayerState(eventInfo.eventPlayer).captureTick = -1;
     }
 }
 function disableOutOfBounds(eventInfo: any) {
 
-    const newState = mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar));
+    const newState = getPlayerState(eventInfo.eventPlayer).isOutOfBounds;
     return newState;
 
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, OutOfBoundsPlayerVar), false)
+    getPlayerState(eventInfo.eventPlayer).isOutOfBounds = false;
     mod.SkipManDown(eventInfo.eventPlayer, false)
 }
 function deployAIVehicle(Vehicle: any, Distance: number, eventInfo: any) {
@@ -2295,21 +2257,21 @@ function startAIScouting(Player: any) {
             mod.AllCapturePoints(),
             (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(Player), mod.GetCurrentOwnerTeam(currentArrayElement)))),
         0)) {
-        mod.SetVariable(mod.ObjectVariable(Player, AI_TargetPlayerVar), mod.RandomValueInArray(filterModArray(
+        getPlayerState(Player).aiTarget = mod.RandomValueInArray(filterModArray(
             mod.AllCapturePoints(),
             (currentArrayElement: any) => mod.Equals(
                 mod.GetTeam(Player),
-                mod.GetCurrentOwnerTeam(currentArrayElement)))))
-        mod.AIDefendPositionBehavior(Player, mod.GetObjectPosition(mod.GetVariable(mod.ObjectVariable(Player, AI_TargetPlayerVar))), 0, 30)
+                mod.GetCurrentOwnerTeam(currentArrayElement))));
+        mod.AIDefendPositionBehavior(Player, mod.GetObjectPosition(getPlayerState(Player).aiTarget!), 0, 30)
     } else {
-        mod.SetVariable(mod.ObjectVariable(Player, AI_TargetPlayerVar), mod.RandomValueInArray(filterModArray(
+        getPlayerState(Player).aiTarget = mod.RandomValueInArray(filterModArray(
             mod.AllCapturePoints(),
-            (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(Player), mod.GetCurrentOwnerTeam(currentArrayElement)))))
-        mod.AIMoveToBehavior(Player, mod.GetObjectPosition(mod.GetVariable(mod.ObjectVariable(Player, AI_TargetPlayerVar))))
+            (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(Player), mod.GetCurrentOwnerTeam(currentArrayElement))));
+        mod.AIMoveToBehavior(Player, mod.GetObjectPosition(getPlayerState(Player).aiTarget!))
     }
     if (mod.GreaterThan(
         mod.DistanceBetween(
-            mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(Player), mod.GetVariable(mod.ObjectVariable(mod.GetTeam(Player), OtherTeamTeamVar)))),
+            mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(Player), getTeamState(mod.GetTeam(Player)).otherTeam)),
             mod.GetObjectPosition(Player)),
         30)) {
         mod.AISetMoveSpeed(Player, mod.MoveSpeed.Sprint)
@@ -2386,31 +2348,29 @@ function showVersion() {
 function updatePlayerCaptureUI(eventInfo: any) {
 
 
-    mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.ValueInArray(mod.GetVariable(CaptureProgressPositionGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)))
-    mod.SetUIWidgetSize(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.ValueInArray(mod.GetVariable(CaptureProgressSizeGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)))
-    mod.SetUITextColor(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), Cap_TextColourTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint)))
-    mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), Cap_BGColourTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint)))
-    mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgressBG", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), Cap_ProgressTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint)))
+    mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.ValueInArray(mod.GetVariable(CaptureProgressPositionGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)))
+    mod.SetUIWidgetSize(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.ValueInArray(mod.GetVariable(CaptureProgressSizeGlobalVar), mod.GetObjId(eventInfo.eventCapturePoint)))
+    mod.SetUITextColor(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capTextColour(mod.GetObjId(eventInfo.eventCapturePoint)))
+    mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capBGColour(mod.GetObjId(eventInfo.eventCapturePoint)))
+    mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgressBG", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capProgressColour(mod.GetObjId(eventInfo.eventCapturePoint)))
     if (mod.Equals(
         mod.GetTeam(eventInfo.eventPlayer),
         mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))) {
-        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.GetVariable(FriendlyTextColourGlobalVar))
+        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.GetVariable(FriendlyTextColourGlobalVar))
     } else {
-        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), mod.GetVariable(EnemyTextColourGlobalVar))
+        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.GetVariable(EnemyTextColourGlobalVar))
     }
-    updateObjectiveUI(mod.ValueInArray(mod.GetVariable(mod.ObjectVariable(mod.GetTeam(eventInfo.eventPlayer), Cap_MessageTeamVar)), mod.GetObjId(eventInfo.eventCapturePoint)), eventInfo)
-    if (mod.NotEqualTo(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar)), mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
-        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), mod.Add(
-            mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar)),
-            1))
+    updateObjectiveUI(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capMessage(mod.GetObjId(eventInfo.eventCapturePoint)), eventInfo)
+    if (mod.NotEqualTo(getPlayerState(eventInfo.eventPlayer).capturePointState, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
+        getPlayerState(eventInfo.eventPlayer).captureTick += 1;
         if (mod.Equals(
             mod.Modulo(
-                mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar)),
+                getPlayerState(eventInfo.eventPlayer).captureTick,
                 10),
             0)) {
             if (mod.GreaterThan(
                 mod.GetCaptureProgress(eventInfo.eventCapturePoint),
-                mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CapturePointStatePlayerVar)))) {
+                getPlayerState(eventInfo.eventPlayer).capturePointState)) {
                 if (mod.Equals(
                     mod.GetTeam(eventInfo.eventPlayer),
                     mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))) {
@@ -2429,53 +2389,55 @@ function updatePlayerCaptureUI(eventInfo: any) {
             }
         }
     } else {
-        mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar), 0)
+        getPlayerState(eventInfo.eventPlayer).captureTick = 0;
     }
 }
 function togglePlayerCaptureUI(Enable: boolean, eventInfo: any) {
 
 
-    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
-    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
-    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
-    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjProgressBG", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
+    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), Enable)
+    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), Enable)
+    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), Enable)
+    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjProgressBG", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), Enable)
 }
 function setupPlayerUI(eventInfo: any) {
 
 
-    mod.SetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar), mod.ValueInArray(mod.GetVariable(ID_PoolGlobalVar), 0))
+    getPlayerState(eventInfo.eventPlayer).uniqueUiId = mod.ValueInArray(mod.GetVariable(ID_PoolGlobalVar), 0);
     if (isTrueForAny(
         mod.GetVariable(UniqueUI_ID_UsedGlobalVar),
         (currentArrayElement: any) => mod.Equals(
             currentArrayElement,
-            mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))))) {
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))))
+            getPlayerState(eventInfo.eventPlayer).uniqueUiId))) {
+        mod.DeleteUIWidget(mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId))
         mod.SetVariable(UniqueUI_ID_UsedGlobalVar, filterModArray(
             mod.GetVariable(UniqueUI_ID_UsedGlobalVar),
-            (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))))
+            (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, getPlayerState(eventInfo.eventPlayer).uniqueUiId)))
     }
     mod.SetVariable(ID_PoolGlobalVar, filterModArray(
         mod.GetVariable(ID_PoolGlobalVar),
-        (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))))
-    mod.SetVariable(UniqueUI_ID_UsedGlobalVar, mod.AppendToArray(mod.GetVariable(UniqueUI_ID_UsedGlobalVar), mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))))
-    mod.AddUIContainer(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)), mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 0), mod.UIAnchor.TopCenter, eventInfo.eventPlayer)
-    mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), mod.UIBgFill.None)
-    mod.SetUIWidgetDepth(mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), mod.UIDepth.AboveGameUI)
+        (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, getPlayerState(eventInfo.eventPlayer).uniqueUiId)))
+    mod.SetVariable(UniqueUI_ID_UsedGlobalVar, mod.AppendToArray(mod.GetVariable(UniqueUI_ID_UsedGlobalVar), getPlayerState(eventInfo.eventPlayer).uniqueUiId))
+    mod.AddUIContainer(getPlayerState(eventInfo.eventPlayer).uniqueUiId, mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 0), mod.UIAnchor.TopCenter, eventInfo.eventPlayer)
+    mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), mod.UIBgFill.None)
+    mod.SetUIWidgetDepth(mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), mod.UIDepth.AboveGameUI)
     if (mod.LessThanEqualTo(mod.CountOf(mod.GetVariable(ID_PoolGlobalVar)), 1)) {
         initPlayerUIIds()
         for (let i = 0; i < mod.CountOf(mod.AllPlayers()); i++) {
+            const p = mod.ValueInArray(mod.AllPlayers(), i) as mod.Player;
+            const id = getPlayerState(p).uniqueUiId;
             mod.SetVariable(ID_PoolGlobalVar, filterModArray(
                 mod.GetVariable(ID_PoolGlobalVar),
-                (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, mod.GetVariable(mod.ObjectVariable(mod.ValueInArray(mod.AllPlayers(), i), UniqueIDPlayerVar)))))
+                (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, id)))
         }
     }
-    mod.AddUIText("ObjText", mod.CreateVector(0, 150, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(""), 36, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, eventInfo.eventPlayer)
-    mod.AddUIText("ObjCounter", mod.CreateVector(0, 210, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.None, mod.Message(""), 28, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, eventInfo.eventPlayer)
-    mod.AddUIContainer("ObjProgressBG", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, eventInfo.eventPlayer)
-    mod.AddUIContainer("ObjProgress", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.Solid, eventInfo.eventPlayer)
-    mod.AddUIText("OOBBackground", mod.CreateVector(0, 0, 0), mod.CreateVector(5000, 5000, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), false, 1, mod.CreateVector(0, 0, 0), 0.9, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, eventInfo.eventPlayer)
-    mod.AddUIText("OOBText", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), false, 1, mod.GetVariable(EnemyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("Return To Combat"), 56, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.TopCenter, eventInfo.eventPlayer)
-    mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar))), false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, CaptureTickPlayerVar))), 72, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.BottomCenter, eventInfo.eventPlayer)
+    mod.AddUIText("ObjText", mod.CreateVector(0, 150, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(""), 36, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, eventInfo.eventPlayer)
+    mod.AddUIText("ObjCounter", mod.CreateVector(0, 210, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.None, mod.Message(""), 28, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, eventInfo.eventPlayer)
+    mod.AddUIContainer("ObjProgressBG", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, eventInfo.eventPlayer)
+    mod.AddUIContainer("ObjProgress", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.Solid, eventInfo.eventPlayer)
+    mod.AddUIText("OOBBackground", mod.CreateVector(0, 0, 0), mod.CreateVector(5000, 5000, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.9, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, eventInfo.eventPlayer)
+    mod.AddUIText("OOBText", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.GetVariable(EnemyBGColourGlobalVar), 0.8, mod.UIBgFill.Blur, mod.Message("Return To Combat"), 56, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.TopCenter, eventInfo.eventPlayer)
+    mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", getPlayerState(eventInfo.eventPlayer).captureTick), 72, mod.GetVariable(EnemyTextColourGlobalVar), 1, mod.UIAnchor.BottomCenter, eventInfo.eventPlayer)
 }
 function manageCapturePointUI(Flag: any, OldProggress: number, eventInfo: any) {
 
@@ -2483,22 +2445,22 @@ function manageCapturePointUI(Flag: any, OldProggress: number, eventInfo: any) {
     if (mod.Equals(
         mod.GetCurrentOwnerTeam(Flag),
         mod.GetTeam(1))) {
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_TextColourTeamVar), mod.GetObjId(Flag), mod.GetVariable(FriendlyTextColourGlobalVar))
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_BGColourTeamVar), mod.GetObjId(Flag), mod.GetVariable(FriendlyBGColourGlobalVar))
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_TextColourTeamVar), mod.GetObjId(Flag), mod.GetVariable(EnemyTextColourGlobalVar))
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_BGColourTeamVar), mod.GetObjId(Flag), mod.GetVariable(EnemyBGColourGlobalVar))
+        getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(Flag), mod.GetVariable(FriendlyTextColourGlobalVar))
+        getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(Flag), mod.GetVariable(FriendlyBGColourGlobalVar))
+        getTeamState(TEAM_2).capTextColours.set(mod.GetObjId(Flag), mod.GetVariable(EnemyTextColourGlobalVar))
+        getTeamState(TEAM_2).capBGColours.set(mod.GetObjId(Flag), mod.GetVariable(EnemyBGColourGlobalVar))
     } else if (mod.Equals(
         mod.GetCurrentOwnerTeam(Flag),
         mod.GetTeam(2))) {
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_TextColourTeamVar), mod.GetObjId(Flag), mod.GetVariable(FriendlyTextColourGlobalVar))
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_BGColourTeamVar), mod.GetObjId(Flag), mod.GetVariable(FriendlyBGColourGlobalVar))
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_TextColourTeamVar), mod.GetObjId(Flag), mod.GetVariable(EnemyTextColourGlobalVar))
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_BGColourTeamVar), mod.GetObjId(Flag), mod.GetVariable(EnemyBGColourGlobalVar))
+        getTeamState(TEAM_2).capTextColours.set(mod.GetObjId(Flag), mod.GetVariable(FriendlyTextColourGlobalVar))
+        getTeamState(TEAM_2).capBGColours.set(mod.GetObjId(Flag), mod.GetVariable(FriendlyBGColourGlobalVar))
+        getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(Flag), mod.GetVariable(EnemyTextColourGlobalVar))
+        getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(Flag), mod.GetVariable(EnemyBGColourGlobalVar))
     } else {
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_TextColourTeamVar), mod.GetObjId(Flag), mod.CreateVector(1, 1, 1))
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_BGColourTeamVar), mod.GetObjId(Flag), mod.CreateVector(0, 0, 0))
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_TextColourTeamVar), mod.GetObjId(Flag), mod.CreateVector(1, 1, 1))
-        mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_BGColourTeamVar), mod.GetObjId(Flag), mod.CreateVector(0, 0, 0))
+        getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(Flag), mod.CreateVector(1, 1, 1))
+        getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(Flag), mod.CreateVector(0, 0, 0))
+        getTeamState(TEAM_2).capTextColours.set(mod.GetObjId(Flag), mod.CreateVector(1, 1, 1))
+        getTeamState(TEAM_2).capBGColours.set(mod.GetObjId(Flag), mod.CreateVector(0, 0, 0))
     }
     if (mod.LessThan(
         mod.GetCaptureProgress(mod.GetCapturePoint(mod.GetObjId(Flag))),
@@ -2509,42 +2471,42 @@ function manageCapturePointUI(Flag: any, OldProggress: number, eventInfo: any) {
             if (mod.GreaterThan(
                 mod.GetCaptureProgress(eventInfo.eventCapturePoint),
                 OldProggress)) {
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_MessageTeamVar), mod.GetObjId(Flag), "CAPTURING")
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_MessageTeamVar), mod.GetObjId(Flag), "LOSING")
+                getTeamState(TEAM_1).capMessages.set(mod.GetObjId(Flag), "CAPTURING")
+                getTeamState(TEAM_2).capMessages.set(mod.GetObjId(Flag), "LOSING")
             } else if (mod.LessThan(
                 mod.GetCaptureProgress(eventInfo.eventCapturePoint),
                 OldProggress)) {
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_MessageTeamVar), mod.GetObjId(Flag), "LOSING")
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_MessageTeamVar), mod.GetObjId(Flag), "CAPTURING")
+                getTeamState(TEAM_1).capMessages.set(mod.GetObjId(Flag), "LOSING")
+                getTeamState(TEAM_2).capMessages.set(mod.GetObjId(Flag), "CAPTURING")
             } else {
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_MessageTeamVar), mod.GetObjId(Flag), "CONTESTED")
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_MessageTeamVar), mod.GetObjId(Flag), "CONTESTED")
+                getTeamState(TEAM_1).capMessages.set(mod.GetObjId(Flag), "CONTESTED")
+                getTeamState(TEAM_2).capMessages.set(mod.GetObjId(Flag), "CONTESTED")
             }
         } else {
             if (mod.GreaterThan(
                 mod.GetCaptureProgress(eventInfo.eventCapturePoint),
                 OldProggress)) {
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_MessageTeamVar), mod.GetObjId(Flag), "LOSING")
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_MessageTeamVar), mod.GetObjId(Flag), "CAPTURING")
+                getTeamState(TEAM_1).capMessages.set(mod.GetObjId(Flag), "LOSING")
+                getTeamState(TEAM_2).capMessages.set(mod.GetObjId(Flag), "CAPTURING")
             } else if (mod.LessThan(
                 mod.GetCaptureProgress(eventInfo.eventCapturePoint),
                 OldProggress)) {
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_MessageTeamVar), mod.GetObjId(Flag), "CAPTURING")
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_MessageTeamVar), mod.GetObjId(Flag), "LOSING")
+                getTeamState(TEAM_1).capMessages.set(mod.GetObjId(Flag), "CAPTURING")
+                getTeamState(TEAM_2).capMessages.set(mod.GetObjId(Flag), "LOSING")
             } else {
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_MessageTeamVar), mod.GetObjId(Flag), "CONTESTED")
-                mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_MessageTeamVar), mod.GetObjId(Flag), "CONTESTED")
+                getTeamState(TEAM_1).capMessages.set(mod.GetObjId(Flag), "CONTESTED")
+                getTeamState(TEAM_2).capMessages.set(mod.GetObjId(Flag), "CONTESTED")
             }
         }
     } else {
         if (mod.Equals(
             mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
             mod.GetTeam(1))) {
-            mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_MessageTeamVar), mod.GetObjId(Flag), "SECURED")
-            mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_MessageTeamVar), mod.GetObjId(Flag), "CONTESTED")
+            getTeamState(TEAM_1).capMessages.set(mod.GetObjId(Flag), "SECURED")
+            getTeamState(TEAM_2).capMessages.set(mod.GetObjId(Flag), "CONTESTED")
         } else {
-            mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(1), Cap_MessageTeamVar), mod.GetObjId(Flag), "CONTESTED")
-            mod.SetVariableAtIndex(mod.ObjectVariable(mod.GetTeam(2), Cap_MessageTeamVar), mod.GetObjId(Flag), "SECURED")
+            getTeamState(TEAM_1).capMessages.set(mod.GetObjId(Flag), "CONTESTED")
+            getTeamState(TEAM_2).capMessages.set(mod.GetObjId(Flag), "SECURED")
         }
     }
 }
@@ -2641,14 +2603,14 @@ function checkConquestAssaultWin() {
                 0);
     return newState;
 
-    mod.SetVariable(mod.ObjectVariable(mod.GetTeam(2), TeamScoreTeamVar), 0)
+    getTeamState(TEAM_2).score = 0;
 }
 function togglePlayerOOBUI(Enable: boolean, eventInfo: any) {
 
 
-    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBBackground", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
-    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBText", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
-    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBCounter", mod.FindUIWidgetWithName(mod.GetVariable(mod.ObjectVariable(eventInfo.eventPlayer, UniqueIDPlayerVar)))), Enable)
+    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBBackground", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), Enable)
+    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), Enable)
+    mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), Enable)
 }
 // global vars
 const tempGlobalVar = mod.GlobalVariable(0)
@@ -2909,4 +2871,9 @@ export function OnAIMoveToFailed(eventPlayer: mod.Player) {
     const eventInfo = { eventPlayer };
     let eventNum = 22;
     aiRetryMoveRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+}
+
+export function OnPlayerLeaveGame(eventNumber: number) {
+    ensureStateInitialized();
+    removePlayerStateById(eventNumber);
 }
