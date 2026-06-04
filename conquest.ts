@@ -69,8 +69,6 @@ let snowVolume: mod.SpatialObject | null = null;
 let flagAnnounce: mod.Array;
 let flagLetters: mod.Array;
 let botNames: mod.Array;
-const uiIdPool: string[] = [];
-const activeUiIds = new Set<string>();
 let objectiveTrackingUI: mod.Array;
 
 // --- 1e. Player State ---
@@ -302,11 +300,7 @@ function initTeams(): void {
 }
 
 function initStaticArrays(): void {
-    uiIdPool.length = 0;
-    activeUiIds.clear();
-
     // Populate static arrays
-    initPlayerUIIds();
     initObjectiveLetters();
     initObjectiveTeamUI();
     initBotNames();
@@ -326,17 +320,18 @@ function initPlayerState(player: mod.Player): PlayerState {
     return state;
 }
 
+function playerRootWidgetName(playerId: number): string {
+    return "PlayerRoot_" + playerId;
+}
+
 function removePlayerStateById(playerId: number): void {
+    mod.DeleteUIWidget(mod.FindUIWidgetWithName(playerRootWidgetName(playerId)));
     const state = playerStates.get(playerId);
     if (state) {
-        // TODO: releasePlayerUiId(state) when UI ID pool is migrated in Phase 7
         playerStates.delete(playerId);
     }
     playerById.delete(playerId);
 }
-
-// acquireUiId / releasePlayerUiId / rebuildUiIdPool
-// will be added when UI ID pool is migrated in Phase 7.
 
 // ============================================================
 // END STATE FOUNDATION
@@ -479,7 +474,6 @@ function initGameSettings() {
     enemyBGColour = mod.CreateVector(0.6, 0.1, 0.1);
     isFXResetting = false;
     // CapturePointProgress is now in CapturePointState
-    mod.SetVariable(UniqueUI_ID_UsedGlobalVar, mod.EmptyArray())
     // PlayersOnPoint is now a Map, initialized in TeamState constructor
     // PlayersOnPoint is now a Map, initialized in TeamState constructor
     // Cap_TextColour is now a Map, initialized in TeamState constructor
@@ -492,11 +486,6 @@ function initGameSettings() {
     // Cap_Progress is now a Map, initialized in TeamState constructor
     // CaptureProgressSize is now in CapturePointState
     // CaptureProgressPosition is now in CapturePointState
-    initPlayerUIIds()
-    initObjectiveLetters()
-    initObjectiveTeamUI()
-    initBotNames()
-    initFlagCalls()
 }
 function initGameSettingsRule(conditionState: any) {
     let newState = true;
@@ -1841,17 +1830,6 @@ function processObjectivePlayerData(Player: any) {
     updatePlayerScoreboard(Player)
     mod.PlaySound(audio.capturedSound!, 0.7, Player)
 }
-function initPlayerUIIds() {
-    const ids: string[] = [];
-    for (let i = 1; i <= 105; i++) {
-        ids.push(i.toString());
-    }
-    let pool = mod.EmptyArray();
-    for (const id of ids) {
-        pool = mod.AppendToArray(pool, id);
-    }
-    mod.SetVariable(ID_PoolGlobalVar, pool);
-}
 function updateObjectiveUI(Label: string, eventInfo: any) {
 
 
@@ -2375,36 +2353,14 @@ function togglePlayerCaptureUI(Enable: boolean, eventInfo: any) {
     mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjProgressBG", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), Enable)
 }
 function setupPlayerUI(eventInfo: any) {
+    const playerId = mod.GetObjId(eventInfo.eventPlayer);
+    const rootName = playerRootWidgetName(playerId);
+    getPlayerState(eventInfo.eventPlayer).uniqueUiId = rootName;
 
-
-    getPlayerState(eventInfo.eventPlayer).uniqueUiId = mod.ValueInArray(mod.GetVariable(ID_PoolGlobalVar), 0);
-    if (isTrueForAny(
-        mod.GetVariable(UniqueUI_ID_UsedGlobalVar),
-        (currentArrayElement: any) => mod.Equals(
-            currentArrayElement,
-            getPlayerState(eventInfo.eventPlayer).uniqueUiId))) {
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId))
-        mod.SetVariable(UniqueUI_ID_UsedGlobalVar, filterModArray(
-            mod.GetVariable(UniqueUI_ID_UsedGlobalVar),
-            (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, getPlayerState(eventInfo.eventPlayer).uniqueUiId)))
-    }
-    mod.SetVariable(ID_PoolGlobalVar, filterModArray(
-        mod.GetVariable(ID_PoolGlobalVar),
-        (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, getPlayerState(eventInfo.eventPlayer).uniqueUiId)))
-    mod.SetVariable(UniqueUI_ID_UsedGlobalVar, mod.AppendToArray(mod.GetVariable(UniqueUI_ID_UsedGlobalVar), getPlayerState(eventInfo.eventPlayer).uniqueUiId))
-    mod.AddUIContainer(getPlayerState(eventInfo.eventPlayer).uniqueUiId, mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 0), mod.UIAnchor.TopCenter, eventInfo.eventPlayer)
-    mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), mod.UIBgFill.None)
-    mod.SetUIWidgetDepth(mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), mod.UIDepth.AboveGameUI)
-    if (mod.LessThanEqualTo(mod.CountOf(mod.GetVariable(ID_PoolGlobalVar)), 1)) {
-        initPlayerUIIds()
-        for (let i = 0; i < mod.CountOf(mod.AllPlayers()); i++) {
-            const p = mod.ValueInArray(mod.AllPlayers(), i) as mod.Player;
-            const id = getPlayerState(p).uniqueUiId;
-            mod.SetVariable(ID_PoolGlobalVar, filterModArray(
-                mod.GetVariable(ID_PoolGlobalVar),
-                (currentArrayElement: any) => mod.NotEqualTo(currentArrayElement, id)))
-        }
-    }
+    mod.DeleteUIWidget(mod.FindUIWidgetWithName(rootName));
+    mod.AddUIContainer(rootName, mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 0), mod.UIAnchor.TopCenter, eventInfo.eventPlayer)
+    mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName(rootName), mod.UIBgFill.None)
+    mod.SetUIWidgetDepth(mod.FindUIWidgetWithName(rootName), mod.UIDepth.AboveGameUI)
     mod.AddUIText("ObjText", mod.CreateVector(0, 150, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(""), 36, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, eventInfo.eventPlayer)
     mod.AddUIText("ObjCounter", mod.CreateVector(0, 210, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.None, mod.Message(""), 28, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, eventInfo.eventPlayer)
     mod.AddUIContainer("ObjProgressBG", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, eventInfo.eventPlayer)
@@ -2586,9 +2542,7 @@ function togglePlayerOOBUI(Enable: boolean, eventInfo: any) {
     mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), Enable)
     mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), Enable)
 }
-// UI ID pool variables (temporary until PlayerRoot_<id> replacement)
-const ID_PoolGlobalVar = mod.GlobalVariable(35)
-const UniqueUI_ID_UsedGlobalVar = mod.GlobalVariable(15)
+// UI ID: PlayerRoot_<playerObjectId>
 
 export function OngoingGlobal() {
     ensureStateInitialized();
