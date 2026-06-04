@@ -1,9 +1,7 @@
 
 // ============================================================
-// STATE FOUNDATION (Phase 1)
+// CONFIG
 // ============================================================
-
-// --- 1a. Config and Flags ---
 
 const CONFIG = {
     TIME_LIMIT: 2700,
@@ -32,6 +30,28 @@ const FLAGS = {
     BF4_COLOUR_FILTER: false,
     SNOW_COLOUR_FILTER: false,
 } as const;
+
+// ============================================================
+// EVENT INFO TYPES (Phase 10)
+// ============================================================
+
+type PlayerEventInfo = { eventPlayer: mod.Player };
+type PlayerCombatEventInfo = {
+    eventPlayer: mod.Player;
+    eventOtherPlayer: mod.Player;
+    eventDeathType?: mod.DeathType;
+    eventDamageType?: mod.DamageType;
+    eventWeaponUnlock?: mod.WeaponUnlock;
+};
+type CapturePointEventInfo = { eventCapturePoint: mod.CapturePoint };
+type PlayerCapturePointEventInfo = {
+    eventPlayer: mod.Player;
+    eventCapturePoint: mod.CapturePoint;
+};
+
+// ============================================================
+// STATE FOUNDATION (Phase 1)
+// ============================================================
 
 // --- 1b. Runtime Globals ---
 
@@ -432,6 +452,23 @@ function isTrueForAny(array: mod.Array, predicate: (value: any) => boolean): boo
 // ============================================================
 // END MODLIB REPLACEMENT HELPERS
 // ============================================================
+
+// ============================================================
+// MANAGER SHELLS (Phase 10)
+// ============================================================
+
+class UIController {}
+class PlayerController {}
+class CapturePointController {}
+class AIController {}
+class ConquestGame {}
+
+const uiController = new UIController();
+const playerController = new PlayerController();
+const capturePointController = new CapturePointController();
+const aiController = new AIController();
+const conquestGame = new ConquestGame();
+
 // ============================================================
 
 function initGameSettings() {
