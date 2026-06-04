@@ -1010,83 +1010,290 @@ Final script should be one file with no dependency on `modlib`. While transition
 
 ---
 
-## Phase 10: Long-Term Object-Oriented Game Logic
+## Phase 10: Object-Oriented Migration Foundation
 
-After the state migration and function renaming are stable, start moving gameplay behavior into cohesive non-exported classes/managers inside `conquest.ts`.
+The OO migration is large enough that it should not be a single phase. Split it into small behavior-preserving passes. Keep all classes/managers non-exported and in `conquest.ts`.
 
-Keep Portal constraints:
+Portal constraints still apply:
 
-- still single-file
-- still only event handlers exported
+- single file
+- only event handlers exported
 - no `mod` import
-- no exported classes/managers
+- no exported classes/managers/helpers/state
 - event handlers remain the only public API
 
-Recommended shape:
+Phase 10 is only scaffolding and typing. Do not move significant logic yet.
+
+Add lightweight event-info types to replace repeated `any` where safe:
+
+```ts
+type PlayerEventInfo = { eventPlayer: mod.Player };
+type PlayerCombatEventInfo = {
+    eventPlayer: mod.Player;
+    eventOtherPlayer: mod.Player;
+    eventDeathType?: mod.DeathType;
+    eventDamageType?: mod.DamageType;
+    eventWeaponUnlock?: mod.WeaponUnlock;
+};
+type CapturePointEventInfo = { eventCapturePoint: mod.CapturePoint };
+type PlayerCapturePointEventInfo = {
+    eventPlayer: mod.Player;
+    eventCapturePoint: mod.CapturePoint;
+};
+```
+
+Add empty manager shells only:
+
+```ts
+class UIController {}
+class PlayerController {}
+class CapturePointController {}
+class AIController {}
+class ConquestGame {}
+
+const uiController = new UIController();
+const playerController = new PlayerController();
+const capturePointController = new CapturePointController();
+const aiController = new AIController();
+const conquestGame = new ConquestGame();
+```
+
+Deliverable:
+
+- compiles
+- no behavior changes
+- only event handlers exported
+- manager shells exist but do not own gameplay yet
+
+---
+
+## Phase 11: UIController Migration
+
+Move UI-only helpers into `UIController` first. This is relatively isolated and makes later gameplay controllers smaller.
+
+Candidate methods:
+
+```ts
+class UIController {
+    setupMainUI(): void {}
+    setupScoreUI(leftScore: string, rightScore: string, leftBar: string, rightBar: string, team: mod.Team): void {}
+    updateScoreboard(): void {}
+    updatePlayerScoreboard(player: mod.Player): void {}
+    setupPlayerUI(player: mod.Player): void {}
+    updateObjectiveUI(label: string, eventInfo: PlayerCapturePointEventInfo): void {}
+    updatePlayerCaptureUI(eventInfo: PlayerCapturePointEventInfo): void {}
+    togglePlayerCaptureUI(enabled: boolean, eventInfo: PlayerCapturePointEventInfo): void {}
+    togglePlayerOOBUI(enabled: boolean, eventInfo: PlayerEventInfo): void {}
+    showEndGameUI(widgetName: string, position: mod.Vector): void {}
+    animateUIFlash(team1Widget: string, team2Widget: string): Promise<void> {}
+    showVersion(): void {}
+}
+```
+
+Migration strategy:
+
+1. Move one helper at a time.
+2. Keep a thin free-function wrapper temporarily if it reduces diff size.
+3. Prefer direct calls like `uiController.updateScoreboard()` once call sites are easy to update.
+4. Do not change widget names or UI hierarchy in this phase.
+
+Deliverable:
+
+- all UI helper logic lives in `UIController`
+- behavior unchanged
+- exported event handlers still call existing rule wrappers or controller methods indirectly
+
+---
+
+## Phase 12: PlayerController Migration
+
+Move player lifecycle, scoring, OOB, and team-switch behavior into `PlayerController`.
+
+Candidate methods:
+
+```ts
+class PlayerController {
+    onJoin(player: mod.Player): Promise<void> {}
+    onLeave(playerId: number): void {}
+    onDeploy(player: mod.Player): void {}
+    onUndeploy(eventInfo: PlayerEventInfo): void {}
+    processKill(eventInfo: PlayerCombatEventInfo): void {}
+    processAssist(eventInfo: PlayerCombatEventInfo): void {}
+    processRevive(eventInfo: PlayerCombatEventInfo): void {}
+    handleDeath(eventInfo: PlayerCombatEventInfo): Promise<void> {}
+    handleOutOfBounds(eventInfo: PlayerEventInfo): Promise<void> {}
+    disableOutOfBounds(eventInfo: PlayerEventInfo): void {}
+    handleTeamSwitchAndRepel(eventInfo: { eventPlayer: mod.Player; eventInteractPoint: mod.InteractPoint }): Promise<void> {}
+    applyRepelForce(time: number, eventInfo: { eventPlayer: mod.Player; eventInteractPoint: mod.InteractPoint }): Promise<void> {}
+}
+```
+
+Important constraints:
+
+- preserve current async waits exactly
+- preserve scoring amounts exactly
+- preserve death/ticket bleed behavior exactly
+- keep UI calls delegated to `uiController`
+- keep team score access through `getTeamState(...)`
+
+Deliverable:
+
+- player lifecycle/combat/OOB/team-switch logic lives in `PlayerController`
+- no AI objective logic moved here except calls/delegation
+
+---
+
+## Phase 13: CapturePointController Migration
+
+Move capture point setup, capture progress, capture UI state, and objective capture handling into `CapturePointController`.
+
+Candidate methods:
+
+```ts
+class CapturePointController {
+    setupCapturePoint(cp: mod.CapturePoint): void {}
+    onCaptured(eventInfo: CapturePointEventInfo): Promise<void> {}
+    onCapturing(eventInfo: CapturePointEventInfo): Promise<void> {}
+    runProgressLoop(eventInfo: CapturePointEventInfo): Promise<void> {}
+    manageCapturePointUI(cp: mod.CapturePoint, oldProgress: number, eventInfo: CapturePointEventInfo): void {}
+    spawnObjectiveVehicles(eventInfo: CapturePointEventInfo): void {}
+    processObjectivePlayerData(player: mod.Player): void {}
+    updateFlagIcons(): void {}
+}
+```
+
+Important constraints:
+
+- preserve old-progress vs new-progress ordering
+- keep `CapturePointState` as the source of progress UI size/position
+- keep objective letter/VO flag indexing behavior unchanged
+- watch neutral team paths (`TEAM_NEUTRAL`) carefully
+
+Deliverable:
+
+- capture point behavior lives in `CapturePointController`
+- UI rendering calls delegate to `uiController` where appropriate
+- AI reactions delegate to `aiController`
+
+---
+
+## Phase 14: AIController Migration
+
+Move all custom AI behavior into `AIController`.
+
+Candidate methods:
+
+```ts
+class AIController {
+    addAI(): void {}
+    deployAI(eventInfo: PlayerEventInfo): Promise<void> {}
+    deployAIVehicle(vehicle: mod.Vehicle, time: number, eventInfo: PlayerEventInfo): Promise<void> {}
+    spawnAIObjectives(eventInfo: PlayerEventInfo): void {}
+    startScouting(player: mod.Player): void {}
+    shouldScoutOnDeploy(eventInfo: PlayerEventInfo): boolean {}
+    findNewObjective(eventInfo: PlayerCapturePointEventInfo): Promise<void> {}
+    readyForAttack(eventInfo: PlayerEventInfo): Promise<void> {}
+    targetDamager(eventInfo: PlayerCombatEventInfo): Promise<void> {}
+    exitVehicle(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }): void {}
+    enterVehicle(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }): Promise<void> {}
+    retryMove(eventInfo: PlayerEventInfo): void {}
+}
+```
+
+Important constraints:
+
+- keep `aiSpawnPoints` as `mod.Array` while Portal array APIs are used
+- preserve `botNameIndex` behavior
+- preserve all waits and vehicle-seat behavior
+- fix unreachable AI code only in a separate behavior-fix phase, not during migration
+
+Deliverable:
+
+- AI behavior lives in `AIController`
+- player/capture controllers call into `aiController` rather than owning AI details
+
+---
+
+## Phase 15: ConquestGame Migration
+
+Move game mode lifecycle, score/timer updates, ticket bleed, music, and end-game logic into `ConquestGame`.
+
+Candidate methods:
 
 ```ts
 class ConquestGame {
-    initialize(): void {}
-    updateScoreAndTime(): void {}
-    endGame(): void {}
-}
-
-class CapturePointController {
-    onCaptured(cp: mod.CapturePoint): void {}
-    onCapturing(cp: mod.CapturePoint): void {}
-    updateProgress(cp: mod.CapturePoint): void {}
-}
-
-class PlayerController {
-    onJoin(player: mod.Player): void {}
-    onLeave(playerId: number): void {}
-    onDeploy(player: mod.Player): void {}
-    onDeath(player: mod.Player): void {}
-}
-
-class AIController {
-    addAI(): void {}
-    deployAI(player: mod.Player): void {}
-    chooseObjective(player: mod.Player): void {}
-}
-
-class UIController {
-    setupMainUI(): void {}
-    setupPlayerUI(player: mod.Player): void {}
-    updateScoreboard(): void {}
-    updateCapturePointUI(player: mod.Player, cp: mod.CapturePoint): void {}
+    initGameSettings(): void {}
+    setupMap(): Promise<void> {}
+    shouldUpdateScoreTime(): boolean {}
+    updateScoreTimeAndAI(): Promise<void> {}
+    shouldTrackScore(): boolean {}
+    trackScoreAndBleed(): void {}
+    shouldPlayNearEndMusic(): boolean {}
+    playNearEndMusic(): void {}
+    shouldEndGame(): boolean {}
+    endGame(): Promise<void> {}
+    checkConquestAssaultWin(): void {}
+    resetFX(eventInfo: PlayerEventInfo): Promise<void> {}
 }
 ```
 
-Event handlers should become thin wrappers:
+Important constraints:
+
+- preserve ticket math exactly
+- preserve music event ordering
+- preserve end-game UI timing/positions
+- keep `OngoingGlobal` event ordering and condition indexes stable unless intentionally changed
+
+Deliverable:
+
+- game lifecycle logic lives in `ConquestGame`
+- exported event handlers are thin dispatchers into controllers/rules
+
+---
+
+## Phase 16: Rule Wrapper Consolidation
+
+After controllers own behavior, decide whether to keep or remove `*Rule` wrappers.
+
+Current wrappers combine:
+
+- condition-state edge detection
+- condition check
+- action dispatch
+
+Options:
+
+1. Keep wrappers but make them delegate to controllers.
+2. Replace wrappers with a small generic helper:
 
 ```ts
-const game = new ConquestGame();
-const players = new PlayerController();
-const capturePoints = new CapturePointController();
-const ai = new AIController();
-const ui = new UIController();
-
-export function OnPlayerJoinGame(eventPlayer: mod.Player) {
-    ensureStateInitialized();
-    players.onJoin(eventPlayer);
-}
-
-export function OnCapturePointCaptured(eventCapturePoint: mod.CapturePoint) {
-    ensureStateInitialized();
-    capturePoints.onCaptured(eventCapturePoint);
+function runRule(conditionState: ConditionState, condition: () => boolean, action: () => void | Promise<void>): void {
+    if (!conditionState.update(condition())) return;
+    action();
 }
 ```
 
-Migration order:
+3. Move condition checks into controller methods and keep event handlers explicit.
 
-1. UI logic (`Scoreboard`, `MainUI_ScoreandTime`, player UI, capture point UI)
-2. capture point logic
-3. player lifecycle/combat scoring
-4. AI behavior
-5. game mode lifecycle / win conditions
+Do this only after behavior is stable. This phase is cleanup, not gameplay migration.
 
-Do this after state is migrated so logic classes operate on typed state instead of Portal variable APIs.
+Deliverable:
+
+- consistent rule dispatch style
+- event handler exports remain unchanged
+- no behavior changes
+
+---
+
+## Phase 17: Optional Behavior-Fix Pass
+
+Only after OO migration is complete, address existing behavior bugs or suspicious inherited logic. Examples already observed:
+
+- loops like `for (let i = 10; i < 0; i += -2)` that never run
+- unreachable code after an early `return` in AI scouting logic, if still present
+- any visual defaults that were previously undefined but now explicit
+
+Keep this separate from refactor phases so behavior changes are intentional and testable.
 
 ---
 
@@ -1133,4 +1340,11 @@ Also validate in Portal, not just with TypeScript:
 | 7 Global state | Medium | many UI/audio globals and config flags |
 | 8 Delete declarations | Low | only after grep proves no references |
 | 9 Remove import | Medium | final single-file validation |
-| 10 OO game logic | Medium | should happen after state migration and rename pass; risk is over-refactoring before behavior is stable |
+| 10 OO foundation | Low | scaffolding/types only, no gameplay movement |
+| 11 UIController | Medium | many widget names/call sites; keep visual behavior unchanged |
+| 12 PlayerController | Medium | async waits, OOB, team switch, and scoring must remain exact |
+| 13 CapturePointController | Medium-high | progress old/new ordering and neutral-team behavior are fragile |
+| 14 AIController | Medium-high | AI behavior has waits, target state, vehicles, and Portal array APIs |
+| 15 ConquestGame | Medium-high | ticket bleed, music, timer, and end-game logic are central |
+| 16 Rule wrappers | Low-medium | cleanup only after controllers are stable |
+| 17 Behavior fixes | Medium | intentionally changes behavior; test separately |
