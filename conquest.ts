@@ -31,10 +31,7 @@ const FLAGS = {
     SNOW_COLOUR_FILTER: false,
 } as const;
 
-// ============================================================
-// EVENT INFO TYPES (Phase 10)
-// ============================================================
-
+// EVENT INFO TYPES
 type PlayerEventInfo = { eventPlayer: mod.Player };
 type PlayerCombatEventInfo = {
     eventPlayer: mod.Player;
@@ -49,11 +46,7 @@ type PlayerCapturePointEventInfo = {
     eventCapturePoint: mod.CapturePoint;
 };
 
-// ============================================================
-// STATE FOUNDATION (Phase 1)
-// ============================================================
-
-// --- 1b. Runtime Globals ---
+// Runtime Globals
 
 let isGameOngoing = false;
 let isFXResetting = false;
@@ -67,7 +60,7 @@ let friendlyBGColour: mod.Vector;
 let enemyTextColour: mod.Vector;
 let enemyBGColour: mod.Vector;
 
-// --- 1c. Spawned Object References ---
+// Spawned Object References
 
 const audio = {
     vo1: null as mod.VO | null,
@@ -84,14 +77,14 @@ const audio = {
 
 let snowVolume: mod.SpatialObject | null = null;
 
-// --- 1d. Static Portal Arrays ---
+// Static Portal Arrays
 
 let flagAnnounce: mod.Array;
 let flagLetters: mod.Array;
 let botNames: mod.Array;
 let objectiveTrackingUI: mod.Array;
 
-// --- 1e. Player State ---
+// Player State
 
 class PlayerState {
     constructor(public player: mod.Player) {}
@@ -119,7 +112,7 @@ class PlayerState {
     startPosition: mod.Vector | null = null;
 }
 
-// --- 1f. Team State ---
+// Team State
 
 class TeamState {
     faction: "NATO" | "PAX" = "NATO";
@@ -158,7 +151,7 @@ class TeamState {
     }
 }
 
-// --- 1g. Capture Point State ---
+// Capture Point State
 
 class CapturePointState {
     id: number;
@@ -183,7 +176,7 @@ class CapturePointState {
     }
 }
 
-// --- 1h. Registries and Accessors ---
+// Registries and Accessors
 
 const playerStates = new Map<number, PlayerState>();
 const teamStates = new Map<number, TeamState>();
@@ -2134,8 +2127,6 @@ function setupMapRule(conditionState: any) {
     conquestGame.setupMap();
 }
 
-
-
 function updateScoreTimeRule(conditionState: any) {
     let newState = conquestGame.shouldUpdateScoreTime();
     if (!conditionState.update(newState)) {
@@ -2248,8 +2239,6 @@ function endGameRule(conditionState: any) {
     }
     conquestGame.endGame();
 }
-
-
 
 function showCaptureUIRule(conditionState: any, eventInfo: any) {
     let newState = capturePointController.shouldShowCaptureUI(eventInfo);
@@ -2430,13 +2419,6 @@ function aiTargetOnKillAssistRule(conditionState: any, eventInfo: any) {
     aiController.targetOnKillAssist(eventInfo);
 }
 
-
-
-
-
-
-
-
 function initObjectiveLetters() {
     flagLetters = mod.EmptyArray();
     for (let i = 0; i < 26; i++) {
@@ -2451,6 +2433,7 @@ function initObjectiveTeamUI() {
         }
     }
 }
+
 function initBotNames() {
     const names: string[] = [
         "andy6170 (Bot)",
@@ -2539,15 +2522,6 @@ function initFlagCalls() {
     flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Hotel);
     flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.India);
 }
-
-
-
-
-
-
-
-
-// UI ID: PlayerRoot_<playerObjectId>
 
 export function OngoingGlobal() {
     ensureStateInitialized();
