@@ -110,6 +110,8 @@ class PlayerState {
     aiInAction = false;
     aiSpawnPoints: mod.Array = undefined!;
     startPosition: mod.Vector | null = null;
+
+    conditions = new Conditions(PlayerConditionSlot.Count);
 }
 
 // Team State
@@ -158,11 +160,13 @@ class CapturePointState {
     progress = 0;
     uiSize: mod.Vector;
     uiPosition: mod.Vector;
+    conditions: Conditions;
 
     constructor(public capturePoint: mod.CapturePoint) {
         this.id = mod.GetObjId(capturePoint);
         this.uiSize = mod.CreateVector(0, 7, 0);
         this.uiPosition = mod.CreateVector(-110, 200, 0);
+        this.conditions = new Conditions(CapturePointConditionSlot.Count);
     }
 
     setProgressVisuals(progress: number): void {
@@ -373,17 +377,16 @@ class ConditionState {
 class Conditions {
     conditionStates: ConditionState[] = [];
 
-    getConditionState(n: number): ConditionState {
-        while (n >= this.conditionStates.length) {
+    constructor(slotCount: number) {
+        for (let i = 0; i < slotCount; i++) {
             this.conditionStates.push(new ConditionState());
         }
+    }
+
+    getConditionState(n: number): ConditionState {
         return this.conditionStates[n];
     }
 }
-
-let globalConditions = new Conditions();
-let playerConditions: Conditions[] = [];
-let capturePointConditions: Conditions[] = [];
 
 enum GlobalConditionSlot {
     InitGameSettings = 0,
@@ -398,6 +401,7 @@ enum GlobalConditionSlot {
     PlayVOLowTickets = 9,
     PlayVOTeam2LowTickets = 10,
     SetupMap = 11,
+    Count = 12,
 }
 
 enum PlayerConditionSlot {
@@ -424,32 +428,28 @@ enum PlayerConditionSlot {
     AIExitVehicle = 20,
     AIEnterVehicle = 21,
     AIRetryMove = 22,
+    Count = 23,
 }
 
 enum CapturePointConditionSlot {
     HandleCaptured = 0,
     NotifyCapture = 1,
     RunProgressLoop = 2,
+    Count = 3,
 }
+
+let globalConditions = new Conditions(GlobalConditionSlot.Count);
 
 function getGlobalCondition(n: number): ConditionState {
     return globalConditions.getConditionState(n);
 }
 
 function getPlayerCondition(player: mod.Player, n: number): ConditionState {
-    const id = mod.GetObjId(player);
-    while (id >= playerConditions.length) {
-        playerConditions.push(new Conditions());
-    }
-    return playerConditions[id].getConditionState(n);
+    return getPlayerState(player).conditions.getConditionState(n);
 }
 
 function getCapturePointCondition(cp: mod.CapturePoint, n: number): ConditionState {
-    const id = mod.GetObjId(cp);
-    while (id >= capturePointConditions.length) {
-        capturePointConditions.push(new Conditions());
-    }
-    return capturePointConditions[id].getConditionState(n);
+    return getCapturePointState(cp).conditions.getConditionState(n);
 }
 
 // --- Array Helpers ---
