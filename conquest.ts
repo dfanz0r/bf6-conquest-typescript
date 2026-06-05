@@ -189,6 +189,7 @@ class PlayerState {
     }
 
     uniqueUiId = "";
+    uiRoot: mod.UIWidget | null = null;
     score = 0;
     kills = 0;
     deaths = 0;
@@ -334,6 +335,18 @@ function isNeutralTeam(team: mod.Team): boolean {
     return sameTeam(team, TEAM_NEUTRAL);
 }
 
+function isAlivePlayer(player: mod.Player): boolean {
+    return mod.IsPlayerValid(player) && mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive);
+}
+
+function isAISoldier(player: mod.Player): boolean {
+    return mod.IsPlayerValid(player) && mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier);
+}
+
+function isPlayerInVehicle(player: mod.Player): boolean {
+    return mod.IsPlayerValid(player) && mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle);
+}
+
 function getCapturePointState(cp: mod.CapturePoint): CapturePointState {
     const id = mod.GetObjId(cp);
     capturePointById.set(id, cp);
@@ -443,16 +456,18 @@ function playerRootWidgetName(playerId: number): string {
     return "PlayerRoot_" + playerId;
 }
 
-function deleteUIWidgetWithNameIfExists(name: string): void {
-    const widget = mod.FindUIWidgetWithName(name) as mod.UIWidget | undefined | null;
-    if (widget === undefined || widget === null) return;
-    mod.DeleteUIWidget(widget);
+function getPlayerRootWidget(player: mod.Player): mod.UIWidget {
+    const state = getPlayerState(player);
+    if (!isDefined(state.uiRoot)) {
+        state.uiRoot = mod.FindUIWidgetWithName(state.uniqueUiId) as mod.UIWidget;
+    }
+    return state.uiRoot;
 }
 
 function removePlayerStateById(playerId: number): void {
-    deleteUIWidgetWithNameIfExists(playerRootWidgetName(playerId));
     const state = playerStates.get(playerId);
     if (state) {
+        state.uiRoot = null;
         playerStates.delete(playerId);
     }
     playerById.delete(playerId);
@@ -560,6 +575,10 @@ function getCapturePointCondition(cp: mod.CapturePoint, n: number): ConditionSta
     return getCapturePointState(cp).conditions.getConditionState(n);
 }
 
+function isDefined<T>(value: T | null | undefined): value is T {
+    return value !== undefined && value !== null;
+}
+
 // --- Array Helpers ---
 
 function modArrayToNative<T>(array: mod.Array): T[] {
@@ -620,19 +639,20 @@ class UIController {
     }
 
     updateObjectiveUI(label: string, eventInfo: PlayerCapturePointEventInfo): void {
-        mod.SetUITextLabel(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.Message(label))
-        mod.SetUITextLabel(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.Message("{} - {}", getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0, getTeamState(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0))
-        if (mod.Or(
-            mod.Equals(
-                getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0,
-                0),
-            mod.GreaterThan(
-                getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0,
-                getTeamState(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam).playersOnPoints.get(mod.GetObjId(eventInfo.eventCapturePoint)) ?? 0))) {
-            mod.SetUITextColor(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), mod.CreateVector(1, 1, 1))
-        } else {
-            mod.SetUITextColor(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enemyTextColour)
-        }
+        const player = eventInfo.eventPlayer;
+        const playerState = getPlayerState(player);
+        const playerRoot = getPlayerRootWidget(player);
+        const objText = mod.FindUIWidgetWithName("ObjText", playerRoot);
+        const objCounter = mod.FindUIWidgetWithName("ObjCounter", playerRoot);
+        const teamState = getTeamState(playerState.team);
+        const otherTeamState = getTeamState(teamState.otherTeam);
+        const capturePointId = mod.GetObjId(eventInfo.eventCapturePoint);
+        const teamPlayersOnPoint = teamState.playersOnPoints.get(capturePointId) ?? 0;
+        const enemyPlayersOnPoint = otherTeamState.playersOnPoints.get(capturePointId) ?? 0;
+
+        mod.SetUITextLabel(objText, mod.Message(label))
+        mod.SetUITextLabel(objCounter, mod.Message("{} - {}", teamPlayersOnPoint, enemyPlayersOnPoint))
+        mod.SetUITextColor(objCounter, teamPlayersOnPoint === 0 || teamPlayersOnPoint > enemyPlayersOnPoint ? mod.CreateVector(1, 1, 1) : enemyTextColour)
     }
 
     setupMainUI(): void {
@@ -790,32 +810,43 @@ class UIController {
     setupPlayerUI(player: mod.Player): void {
         const playerId = mod.GetObjId(player);
         const rootName = playerRootWidgetName(playerId);
-        getPlayerState(player).uniqueUiId = rootName;
+        const playerState = getPlayerState(player);
+        playerState.uniqueUiId = rootName;
 
-        deleteUIWidgetWithNameIfExists(rootName);
+        if (isDefined(playerState.uiRoot)) {
+            mod.DeleteUIWidget(playerState.uiRoot);
+            playerState.uiRoot = null;
+        }
         mod.AddUIContainer(rootName, mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 0), mod.UIAnchor.TopCenter, player)
-        mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName(rootName), mod.UIBgFill.None)
-        mod.SetUIWidgetDepth(mod.FindUIWidgetWithName(rootName), mod.UIDepth.AboveGameUI)
-        mod.AddUIText("ObjText", mod.CreateVector(0, 150, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(""), 36, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, player)
-        mod.AddUIText("ObjCounter", mod.CreateVector(0, 210, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.None, mod.Message(""), 28, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, player)
-        mod.AddUIContainer("ObjProgressBG", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, player)
-        mod.AddUIContainer("ObjProgress", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.Solid, player)
-        mod.AddUIText("OOBBackground", mod.CreateVector(0, 0, 0), mod.CreateVector(5000, 5000, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.9, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, player)
-        mod.AddUIText("OOBText", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, enemyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message("Return To Combat"), 56, enemyTextColour, 1, mod.UIAnchor.TopCenter, player)
-        mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", getPlayerState(player).outOfBoundsCountdown), 72, enemyTextColour, 1, mod.UIAnchor.BottomCenter, player)
+        playerState.uiRoot = mod.FindUIWidgetWithName(rootName) as mod.UIWidget;
+        const playerRoot = playerState.uiRoot;
+        mod.SetUIWidgetBgFill(playerRoot, mod.UIBgFill.None)
+        mod.SetUIWidgetDepth(playerRoot, mod.UIDepth.AboveGameUI)
+        mod.AddUIText("ObjText", mod.CreateVector(0, 150, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(""), 36, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, player)
+        mod.AddUIText("ObjCounter", mod.CreateVector(0, 210, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.None, mod.Message(""), 28, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, player)
+        mod.AddUIContainer("ObjProgressBG", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, player)
+        mod.AddUIContainer("ObjProgress", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.Solid, player)
+        mod.AddUIText("OOBBackground", mod.CreateVector(0, 0, 0), mod.CreateVector(5000, 5000, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 0.9, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, player)
+        mod.AddUIText("OOBText", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, enemyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message("Return To Combat"), 56, enemyTextColour, 1, mod.UIAnchor.TopCenter, player)
+        mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", playerState.outOfBoundsCountdown), 72, enemyTextColour, 1, mod.UIAnchor.BottomCenter, player)
     }
 
     togglePlayerCaptureUI(enabled: boolean, eventInfo: PlayerCapturePointEventInfo): void {
-        mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enabled)
-        mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enabled)
-        mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enabled)
-        mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("ObjProgressBG", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enabled)
+        const playerRoot = getPlayerRootWidget(eventInfo.eventPlayer);
+        const captureWidgets = ["ObjText", "ObjCounter", "ObjProgress", "ObjProgressBG"];
+
+        for (const widgetName of captureWidgets) {
+            mod.SetUIWidgetVisible(mod.FindUIWidgetWithName(widgetName, playerRoot), enabled)
+        }
     }
 
     togglePlayerOOBUI(enabled: boolean, eventInfo: PlayerEventInfo): void {
-        mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBBackground", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enabled)
-        mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enabled)
-        mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("OOBCounter", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enabled)
+        const playerRoot = getPlayerRootWidget(eventInfo.eventPlayer);
+        const oobWidgets = ["OOBBackground", "OOBText", "OOBCounter"];
+
+        for (const widgetName of oobWidgets) {
+            mod.SetUIWidgetVisible(mod.FindUIWidgetWithName(widgetName, playerRoot), enabled)
+        }
     }
 
     updateFlagIcons(): void {
@@ -854,48 +885,37 @@ class UIController {
     }
 
     updatePlayerCaptureUI(eventInfo: PlayerCapturePointEventInfo): void {
-        mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getCapturePointState(eventInfo.eventCapturePoint).uiPosition)
-        mod.SetUIWidgetSize(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getCapturePointState(eventInfo.eventCapturePoint).uiSize)
-        mod.SetUITextColor(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capTextColour(mod.GetObjId(eventInfo.eventCapturePoint)))
-        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjText", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capBGColour(mod.GetObjId(eventInfo.eventCapturePoint)))
-        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgressBG", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capProgressColour(mod.GetObjId(eventInfo.eventCapturePoint)))
-        if (mod.Equals(
-            mod.GetTeam(eventInfo.eventPlayer),
-            mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))) {
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), friendlyTextColour)
-        } else {
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("ObjProgress", mod.FindUIWidgetWithName(getPlayerState(eventInfo.eventPlayer).uniqueUiId)), enemyTextColour)
-        }
-        this.updateObjectiveUI(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capMessage(mod.GetObjId(eventInfo.eventCapturePoint)), eventInfo)
-        if (mod.NotEqualTo(getPlayerState(eventInfo.eventPlayer).capturePointState, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
-            getPlayerState(eventInfo.eventPlayer).captureProgressTick += 1;
-            if (mod.Equals(
-                mod.Modulo(
-                    getPlayerState(eventInfo.eventPlayer).captureProgressTick,
-                    10),
-                0)) {
-                if (mod.GreaterThan(
-                    mod.GetCaptureProgress(eventInfo.eventCapturePoint),
-                    getPlayerState(eventInfo.eventPlayer).capturePointState)) {
-                    if (mod.Equals(
-                        mod.GetTeam(eventInfo.eventPlayer),
-                        mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))) {
-                        mod.PlaySound(audio.tickSoundTaking!, 0.5, eventInfo.eventPlayer)
-                    } else {
-                        mod.PlaySound(audio.tickSoundLosing!, 0.5, eventInfo.eventPlayer)
-                    }
-                } else {
-                    if (mod.Equals(
-                        mod.GetTeam(eventInfo.eventPlayer),
-                        mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))) {
-                        mod.PlaySound(audio.tickSoundLosing!, 0.5, eventInfo.eventPlayer)
-                    } else {
-                        mod.PlaySound(audio.tickSoundTaking!, 0.5, eventInfo.eventPlayer)
-                    }
-                }
+        const player = eventInfo.eventPlayer;
+        const capturePoint = eventInfo.eventCapturePoint;
+        const playerState = getPlayerState(player);
+        const teamState = getTeamState(playerState.team);
+        const capturePointState = getCapturePointState(capturePoint);
+        const capturePointId = mod.GetObjId(capturePoint);
+        const captureProgress = mod.GetCaptureProgress(capturePoint);
+        const ownerProgressTeam = mod.GetOwnerProgressTeam(capturePoint);
+        const playerRoot = getPlayerRootWidget(player);
+        const objText = mod.FindUIWidgetWithName("ObjText", playerRoot);
+        const objProgress = mod.FindUIWidgetWithName("ObjProgress", playerRoot);
+        const objProgressBG = mod.FindUIWidgetWithName("ObjProgressBG", playerRoot);
+
+        mod.SetUIWidgetPosition(objProgress, capturePointState.uiPosition)
+        mod.SetUIWidgetSize(objProgress, capturePointState.uiSize)
+        mod.SetUITextColor(objText, teamState.capTextColour(capturePointId))
+        mod.SetUIWidgetBgColor(objText, teamState.capBGColour(capturePointId))
+        mod.SetUIWidgetBgColor(objProgressBG, teamState.capProgressColour(capturePointId))
+        mod.SetUIWidgetBgColor(objProgress, sameTeam(playerState.team, ownerProgressTeam) ? friendlyTextColour : enemyTextColour)
+        this.updateObjectiveUI(teamState.capMessage(capturePointId), eventInfo)
+
+        if (playerState.capturePointState !== captureProgress) {
+            playerState.captureProgressTick += 1;
+            if (playerState.captureProgressTick % 10 === 0) {
+                const progressIncreasing = captureProgress > playerState.capturePointState;
+                const playerIsProgressOwner = sameTeam(playerState.team, ownerProgressTeam);
+                const tickSound = progressIncreasing === playerIsProgressOwner ? audio.tickSoundTaking! : audio.tickSoundLosing!;
+                mod.PlaySound(tickSound, 0.5, player)
             }
         } else {
-            getPlayerState(eventInfo.eventPlayer).captureProgressTick = 0;
+            playerState.captureProgressTick = 0;
         }
     }
 
@@ -929,7 +949,7 @@ class UIController {
     }
 
     updateOOBUI(player: mod.Player, tick: number): void {
-        const playerRoot = mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId);
+        const playerRoot = getPlayerRootWidget(player);
         const counterWidget = mod.FindUIWidgetWithName("OOBCounter", playerRoot);
         mod.SetUITextLabel(counterWidget, mod.Message("{}", tick))
     }
@@ -980,7 +1000,7 @@ class UIController {
             filterColour = mod.CreateVector(0, 0.4, 0.7);
         }
 
-        if (filterColour) {
+        if (isDefined(filterColour)) {
             mod.SetUIWidgetBgColor(container, filterColour)
             mod.SetUIWidgetBgAlpha(container, 0.2)
             mod.SetUIWidgetBgFill(container, mod.UIBgFill.Blur)
@@ -1105,8 +1125,8 @@ class PlayerController {
     }
 
     shouldExitAreaTrigger(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }): boolean {
-        return this.isOutOfBoundsAreaTrigger(eventInfo.eventAreaTrigger, mod.GetTeam(eventInfo.eventPlayer)) ||
-            !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive);
+        const player = eventInfo.eventPlayer;
+        return this.isOutOfBoundsAreaTrigger(eventInfo.eventAreaTrigger, mod.GetTeam(player)) || !isAlivePlayer(player);
     }
 
     private isOutOfBoundsAreaTrigger(areaTrigger: mod.AreaTrigger, playerTeam: mod.Team): boolean {
@@ -1131,7 +1151,7 @@ class PlayerController {
     async applyRepelForce(time: number, eventInfo: { eventPlayer: mod.Player; eventInteractPoint: mod.InteractPoint }): Promise<void> {
         const player = eventInfo.eventPlayer;
         const repelObject = mod.GetSpatialObject(mod.GetObjId(eventInfo.eventInteractPoint) + 50);
-        if (!repelObject) return;
+        if (!isDefined(repelObject)) return;
 
         const playerPosition = mod.GetObjectPosition(player);
         const repelPosition = mod.GetObjectPosition(repelObject);
@@ -1194,14 +1214,12 @@ class PlayerController {
         const player = eventInfo.eventPlayer;
         const playerState = getPlayerState(player);
 
-        if (playerState.ignoreOOB ||
-            playerState.isOutOfBounds ||
-            !mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive)) return;
+        if (playerState.ignoreOOB || playerState.isOutOfBounds || !isAlivePlayer(player)) return;
 
         playerState.isOutOfBounds = true;
         mod.SkipManDown(player, true)
 
-        if (mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier)) {
+        if (isAISoldier(player)) {
             for (let countdown = 10; countdown >= 0; countdown -= 1) {
                 playerState.outOfBoundsCountdown = countdown;
                 await waitUntil(1, () => !playerState.isOutOfBounds)
@@ -1253,7 +1271,7 @@ class PlayerController {
         if (!mod.IsPlayerValid(player)) return;
 
         uiController.updatePlayerScoreboard(player)
-        if (mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier)) return;
+        if (isAISoldier(player)) return;
 
         uiController.setupPlayerUI(player)
         await mod.Wait(5)
@@ -1276,8 +1294,7 @@ class PlayerController {
             this.disableOutOfBounds(eventInfo)
         }
         if (!FLAGS.ENABLE_CUSTOM_AI ||
-            !mod.IsPlayerValid(player) ||
-            !mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier)) return;
+            !isAISoldier(player)) return;
 
         if (FLAGS.PLAYER_DEATHS_BLEED && mod.NotEqualTo(player, eventInfo.eventOtherPlayer)) {
             getTeamState(playerState.team).score -= 1;
@@ -1287,7 +1304,8 @@ class PlayerController {
 
         const playerPosition = mod.GetObjectPosition(player);
         const closestTeammate = mod.ClosestPlayerTo(playerPosition, playerState.team);
-        if (closestTeammate && mod.DistanceBetween(playerPosition, mod.GetObjectPosition(closestTeammate)) > 20) {
+        if (mod.IsPlayerValid(closestTeammate) &&
+            mod.DistanceBetween(playerPosition, mod.GetObjectPosition(closestTeammate)) > 20) {
             await mod.Wait(3)
             if (mod.IsPlayerValid(player)) {
                 mod.UndeployPlayer(player)
@@ -1321,9 +1339,10 @@ class CapturePointController {
                 mod.GetTeam(currentArrayElement),
                 mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)));
         for (let i = 0; i < mod.CountOf(playersOnObjective); i++) {
-            this.processObjectivePlayerData(mod.ValueInArray(playersOnObjective, i) as mod.Player)
-            if (mod.GetSoldierState(mod.ValueInArray(playersOnObjective, i), mod.SoldierStateBool.IsAISoldier)) {
-                aiController.startScouting(mod.ValueInArray(playersOnObjective, i))
+            const player = mod.ValueInArray(playersOnObjective, i) as mod.Player;
+            this.processObjectivePlayerData(player)
+            if (isAISoldier(player)) {
+                aiController.startScouting(player)
             }
         }
         this.spawnObjectiveVehicles(eventInfo)
@@ -1491,9 +1510,7 @@ class CapturePointController {
     }
 
     private isValidAlivePlayerOnTeam(player: mod.Player, team: mod.Team): boolean {
-        return mod.IsPlayerValid(player) &&
-            mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive) &&
-            mod.Equals(mod.GetTeam(player), team);
+        return isAlivePlayer(player) && mod.Equals(mod.GetTeam(player), team);
     }
 
     async showCaptureUI(eventInfo: PlayerCapturePointEventInfo): Promise<void> {
@@ -1513,13 +1530,13 @@ class CapturePointController {
         playerState.captureSessionActive = true;
         getPlayerCondition(player, PlayerConditionSlot.ShowCaptureUI).update(false);
 
-        if (!mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier)) {
+        if (!isAISoldier(player)) {
             playerState.captureProgressTick = 9;
             while (playerState.captureSessionActive) {
                 if (!mod.IsPlayerValid(player)) {
                     break
                 }
-                if (mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive)) {
+                if (isAlivePlayer(player)) {
                     uiController.togglePlayerCaptureUI(true, eventInfo)
                     uiController.updatePlayerCaptureUI(eventInfo)
                 } else {
@@ -1555,7 +1572,7 @@ class CapturePointController {
 }
 class AIController {
     shouldRetryMove(eventInfo: PlayerEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier);
+        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer);
     }
 
     retryMove(eventInfo: PlayerEventInfo): void {
@@ -1563,7 +1580,7 @@ class AIController {
     }
 
     shouldExitVehicle(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier);
+        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer);
     }
 
     exitVehicle(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }): void {
@@ -1571,7 +1588,7 @@ class AIController {
     }
 
     shouldTargetOnKill(eventInfo: PlayerCombatEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
+        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer) && !isPlayerInVehicle(eventInfo.eventPlayer);
     }
 
     targetOnKill(eventInfo: PlayerCombatEventInfo): void {
@@ -1580,7 +1597,10 @@ class AIController {
     }
 
     shouldTargetOnKillAssist(eventInfo: PlayerCombatEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
+        return FLAGS.ENABLE_CUSTOM_AI &&
+            isAISoldier(eventInfo.eventPlayer) &&
+            mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) &&
+            !isPlayerInVehicle(eventInfo.eventPlayer);
     }
 
     targetOnKillAssist(eventInfo: PlayerCombatEventInfo): void {
@@ -1589,7 +1609,7 @@ class AIController {
     }
 
     shouldScoutOnDeploy(eventInfo: PlayerEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier);
+        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer);
     }
 
     async deployScout(eventInfo: PlayerEventInfo): Promise<void> {
@@ -1601,16 +1621,17 @@ class AIController {
     }
 
     shouldFindNewObjective(eventInfo: PlayerCapturePointEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
+        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer) && !isPlayerInVehicle(eventInfo.eventPlayer);
     }
 
     async findNewObjective(eventInfo: PlayerCapturePointEventInfo): Promise<void> {
         if (mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))) {
             await mod.Wait(1.5)
-            if (mod.IsType(getPlayerState(eventInfo.eventPlayer).aiTarget, mod.Types.CapturePoint)) {
-                if (mod.Equals(eventInfo.eventCapturePoint, getPlayerState(eventInfo.eventPlayer).aiTarget)) {
-                    if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive)) {
-                        mod.AIDefendPositionBehavior(eventInfo.eventPlayer, mod.GetObjectPosition(getPlayerState(eventInfo.eventPlayer).aiTarget!), 0, 20)
+            const playerState = getPlayerState(eventInfo.eventPlayer);
+            if (isDefined(playerState.aiTarget) && mod.IsType(playerState.aiTarget, mod.Types.CapturePoint)) {
+                if (mod.Equals(eventInfo.eventCapturePoint, playerState.aiTarget)) {
+                    if (isAlivePlayer(eventInfo.eventPlayer)) {
+                        mod.AIDefendPositionBehavior(eventInfo.eventPlayer, mod.GetObjectPosition(playerState.aiTarget), 0, 20)
                     }
                 }
             }
@@ -1620,7 +1641,7 @@ class AIController {
     }
 
     shouldReadyForAttack(eventInfo: PlayerEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && mod.LessThanEqualTo(CONFIG.MAX_CUSTOM_AI, 70);
+        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer) && mod.LessThanEqualTo(CONFIG.MAX_CUSTOM_AI, 70);
     }
 
     async readyForAttack(eventInfo: PlayerEventInfo): Promise<void> {
@@ -1628,8 +1649,7 @@ class AIController {
         const playerState = getPlayerState(player);
         const enemyTeam = getTeamState(playerState.team).otherTeam;
 
-        const canEngageNearbyEnemy = () =>
-            mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive) && !mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle);
+        const canEngageNearbyEnemy = () => isAlivePlayer(player) && !isPlayerInVehicle(player);
 
         const attackNearbyEnemy = (enemy: mod.Player) => {
             mod.AIDefendPositionBehavior(player, mod.GetObjectPosition(enemy), 10, 25)
@@ -1642,8 +1662,8 @@ class AIController {
             if (canEngageNearbyEnemy()) {
                 const playerPosition = mod.GetObjectPosition(player);
                 const closestEnemy = mod.ClosestPlayerTo(playerPosition, enemyTeam);
-                const enemyPosition = mod.GetObjectPosition(closestEnemy);
-                if (mod.DistanceBetween(enemyPosition, playerPosition) < 25) {
+                if (mod.IsPlayerValid(closestEnemy) &&
+                    mod.DistanceBetween(mod.GetObjectPosition(closestEnemy), playerPosition) < 25) {
                     attackNearbyEnemy(closestEnemy);
                     await mod.Wait(15)
                     if (!playerState.aiInAction) {
@@ -1656,7 +1676,11 @@ class AIController {
     }
 
     shouldTargetDamager(eventInfo: PlayerCombatEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier) && !getPlayerState(eventInfo.eventPlayer).aiInAction && mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) && !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle);
+        return FLAGS.ENABLE_CUSTOM_AI &&
+            isAISoldier(eventInfo.eventPlayer) &&
+            !getPlayerState(eventInfo.eventPlayer).aiInAction &&
+            mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) &&
+            !isPlayerInVehicle(eventInfo.eventPlayer);
     }
 
     async targetDamager(eventInfo: PlayerCombatEventInfo): Promise<void> {
@@ -1674,14 +1698,14 @@ class AIController {
     }
 
     shouldEnterVehicle(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier);
+        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer);
     }
 
     async enterVehicle(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }): Promise<void> {
         getPlayerState(eventInfo.eventPlayer).startPosition = mod.GetObjectPosition(eventInfo.eventPlayer);
         await mod.Wait(10)
         if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
-            if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle)) {
+            if (isPlayerInVehicle(eventInfo.eventPlayer)) {
                 if (mod.LessThan(
                     mod.DistanceBetween(
                         mod.GetObjectPosition(eventInfo.eventPlayer),
@@ -1705,21 +1729,25 @@ class AIController {
             (vehicle: any) => mod.CountOf(mod.GetAllPlayersInVehicle(vehicle)) < 2);
 
         const teleportToSpawnObjectiveAndTryVehicle = () => {
-            mod.Teleport(player, mod.GetObjectPosition(mod.RandomValueInArray(playerState.aiSpawnPoints)), 1)
+            const spawnPoint = mod.RandomValueInArray(playerState.aiSpawnPoints) as mod.CapturePoint | undefined;
+            if (!isDefined(spawnPoint)) return;
+
+            mod.Teleport(player, mod.GetObjectPosition(spawnPoint), 1)
             const vehicles = openVehicles();
             if (mod.CountOf(vehicles) > 0) {
-                this.deployAIVehicle(mod.RandomValueInArray(vehicles), 60, eventInfo)
+                this.deployAIVehicle(mod.RandomValueInArray(vehicles) as mod.Vehicle | undefined, 60, eventInfo)
             }
         };
 
-        if (!mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle)) {
+        if (!isPlayerInVehicle(player)) {
             playerState.aiSpawnPoints = filterModArray(
                 mod.AllCapturePoints(),
                 (capturePoint: any) => {
                     const capturePointPosition = mod.GetObjectPosition(capturePoint);
                     const closestEnemy = mod.ClosestPlayerTo(capturePointPosition, enemyTeam);
                     return mod.Equals(playerTeam, mod.GetCurrentOwnerTeam(capturePoint)) &&
-                        mod.DistanceBetween(mod.GetObjectPosition(closestEnemy), capturePointPosition) > 40;
+                        (!mod.IsPlayerValid(closestEnemy) ||
+                            mod.DistanceBetween(mod.GetObjectPosition(closestEnemy), capturePointPosition) > 40);
                 })
 
             if (mod.CountOf(playerState.aiSpawnPoints) > 0) {
@@ -1735,14 +1763,16 @@ class AIController {
         }
     }
 
-    deployAIVehicle(vehicle: mod.Vehicle | undefined, distance: number, eventInfo: PlayerEventInfo): void {
-        if (!vehicle) return;
+    deployAIVehicle(vehicle: mod.Vehicle | null | undefined, distance: number, eventInfo: PlayerEventInfo): void {
+        if (!isDefined(vehicle)) return;
 
         const player = eventInfo.eventPlayer;
-        if (mod.IsPlayerValid(player) && !mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle)) {
+        if (mod.IsPlayerValid(player) && !isPlayerInVehicle(player)) {
             const vehiclePosition = mod.GetVehicleState(vehicle, mod.VehicleStateVector.VehiclePosition);
             const playerPosition = mod.GetObjectPosition(player);
-            if (vehiclePosition && playerPosition && mod.DistanceBetween(vehiclePosition, playerPosition) < distance) {
+            if (isDefined(vehiclePosition) &&
+                isDefined(playerPosition) &&
+                mod.DistanceBetween(vehiclePosition, playerPosition) < distance) {
                 mod.AIBattlefieldBehavior(player)
                 mod.ForcePlayerToSeat(player, vehicle, -1)
             }
@@ -1755,7 +1785,7 @@ class AIController {
         this.spawnAIObjectives(eventInfo)
         await mod.Wait(0.2)
 
-        if (mod.RoundToInteger(mod.RandomReal(0, 1)) === 0) {
+        if (mod.RoundToInteger(mod.RandomReal(0, 1)) === 0 && mod.IsPlayerValid(player)) {
             const playerPosition = mod.GetObjectPosition(player);
             const nearbyOpenVehicles = filterModArray(
                 mod.AllVehicles(),
@@ -1764,7 +1794,7 @@ class AIController {
                         mod.GetVehicleState(vehicle, mod.VehicleStateVector.VehiclePosition),
                         playerPosition) < 150);
             if (mod.CountOf(nearbyOpenVehicles) > 0) {
-                this.deployAIVehicle(mod.RandomValueInArray(nearbyOpenVehicles), 150, eventInfo)
+                this.deployAIVehicle(mod.RandomValueInArray(nearbyOpenVehicles) as mod.Vehicle | undefined, 150, eventInfo)
             }
         }
 
@@ -1797,9 +1827,7 @@ class AIController {
     }
 
     startScouting(player: mod.Player): void {
-        if (!mod.IsPlayerValid(player) ||
-            !mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive) ||
-            mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle)) return;
+        if (!isAlivePlayer(player) || isPlayerInVehicle(player)) return;
 
         const playerState = getPlayerState(player);
         const playerTeam = playerState.team;
@@ -1812,15 +1840,25 @@ class AIController {
             const ownedCapturePoints = filterModArray(
                 allCapturePoints,
                 (capturePoint: any) => mod.Equals(playerTeam, mod.GetCurrentOwnerTeam(capturePoint)));
-            playerState.aiTarget = mod.RandomValueInArray(ownedCapturePoints);
-            mod.AIDefendPositionBehavior(player, mod.GetObjectPosition(playerState.aiTarget!), 0, 30)
+            if (mod.CountOf(ownedCapturePoints) === 0) return;
+            const target = mod.RandomValueInArray(ownedCapturePoints) as mod.CapturePoint | undefined;
+            if (!isDefined(target)) return;
+            playerState.aiTarget = target;
+            mod.AIDefendPositionBehavior(player, mod.GetObjectPosition(target), 0, 30)
         } else {
-            playerState.aiTarget = mod.RandomValueInArray(enemyOwnedCapturePoints);
-            mod.AIMoveToBehavior(player, mod.GetObjectPosition(playerState.aiTarget!))
+            const target = mod.RandomValueInArray(enemyOwnedCapturePoints) as mod.CapturePoint | undefined;
+            if (!isDefined(target)) return;
+            playerState.aiTarget = target;
+            mod.AIMoveToBehavior(player, mod.GetObjectPosition(target))
         }
 
         const playerPosition = mod.GetObjectPosition(player);
         const closestEnemy = mod.ClosestPlayerTo(playerPosition, getTeamState(playerTeam).otherTeam);
+        if (!mod.IsPlayerValid(closestEnemy)) {
+            mod.AISetMoveSpeed(player, mod.MoveSpeed.Sprint)
+            return;
+        }
+
         const closestEnemyDistance = mod.DistanceBetween(mod.GetObjectPosition(closestEnemy), playerPosition);
         if (closestEnemyDistance > 30) {
             mod.AISetMoveSpeed(player, mod.MoveSpeed.Sprint)
@@ -2054,9 +2092,9 @@ class ConquestGame {
                 0) && mod.Equals(
                     mod.CountOf(filterModArray(
                         mod.AllPlayers(),
-                        (currentArrayElement: any) => mod.NotEqualTo(mod.Equals(
-                            mod.GetTeam(2),
-                            mod.GetTeam(currentArrayElement)), mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive)))),
+                        (currentArrayElement: any) => mod.NotEqualTo(
+                            mod.Equals(mod.GetTeam(2), mod.GetTeam(currentArrayElement)),
+                            isAlivePlayer(currentArrayElement)))),
                     0)) {
             getTeamState(TEAM_2).score = 0;
         }
