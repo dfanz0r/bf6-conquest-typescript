@@ -1110,41 +1110,40 @@ class PlayerController {
     }
 
     async handleOutOfBounds(eventInfo: PlayerEventInfo): Promise<void> {
-        const newState = !getPlayerState(eventInfo.eventPlayer).ignoreOOB && !getPlayerState(eventInfo.eventPlayer).isOutOfBounds && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive);
-        return;
-
-        getPlayerState(eventInfo.eventPlayer).isOutOfBounds = true;
-        mod.SkipManDown(eventInfo.eventPlayer, true)
-        if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier)) {
-            for (let CaptureTickVar = 10; CaptureTickVar < 0; CaptureTickVar += -1) {
-                getPlayerState(eventInfo.eventPlayer).captureTick = CaptureTickVar;;
-                while (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) { await mod.Wait(1) }
-                if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
-                    break
+        if (!getPlayerState(eventInfo.eventPlayer).ignoreOOB && !getPlayerState(eventInfo.eventPlayer).isOutOfBounds && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive)) {
+            getPlayerState(eventInfo.eventPlayer).isOutOfBounds = true;
+            mod.SkipManDown(eventInfo.eventPlayer, true)
+            if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier)) {
+                for (let CaptureTickVar = 10; CaptureTickVar >= 0; CaptureTickVar -= 1) {
+                    getPlayerState(eventInfo.eventPlayer).captureTick = CaptureTickVar;;
+                    await mod.Wait(1)
+                    if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
+                        break
+                    }
                 }
-            }
-            if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
-                if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
+                if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
+                    if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
+                        mod.DealDamage(eventInfo.eventPlayer, 10000, eventInfo.eventPlayer)
+                    }
+                }
+                getPlayerState(eventInfo.eventPlayer).captureTick = -1;
+            } else {
+                uiController.togglePlayerOOBUI(true, eventInfo)
+                for (let CaptureTickVar = 10; CaptureTickVar >= 0; CaptureTickVar -= 1) {
+                    getPlayerState(eventInfo.eventPlayer).captureTick = CaptureTickVar;;
+                    uiController.updateOOBUI(eventInfo.eventPlayer, getPlayerState(eventInfo.eventPlayer).captureTick)
+                    mod.PlaySound(audio.oobSound!, 0.7, eventInfo.eventPlayer)
+                    await mod.Wait(1)
+                    if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
+                        break
+                    }
+                }
+                if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
                     mod.DealDamage(eventInfo.eventPlayer, 10000, eventInfo.eventPlayer)
                 }
+                uiController.togglePlayerOOBUI(false, eventInfo)
+                getPlayerState(eventInfo.eventPlayer).captureTick = -1;
             }
-            getPlayerState(eventInfo.eventPlayer).captureTick = -1;
-        } else {
-            uiController.togglePlayerOOBUI(true, eventInfo)
-            for (let CaptureTickVar = 10; CaptureTickVar < 0; CaptureTickVar += -1) {
-                getPlayerState(eventInfo.eventPlayer).captureTick = CaptureTickVar;;
-                uiController.updateOOBUI(eventInfo.eventPlayer, getPlayerState(eventInfo.eventPlayer).captureTick)
-                mod.PlaySound(audio.oobSound!, 0.7, eventInfo.eventPlayer)
-                while (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) { await mod.Wait(1) }
-                if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
-                    break
-                }
-            }
-            if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
-                mod.DealDamage(eventInfo.eventPlayer, 10000, eventInfo.eventPlayer)
-            }
-            uiController.togglePlayerOOBUI(false, eventInfo)
-            getPlayerState(eventInfo.eventPlayer).captureTick = -1;
         }
     }
 
@@ -1155,11 +1154,10 @@ class PlayerController {
     }
 
     disableOutOfBounds(eventInfo: PlayerEventInfo): void {
-        const newState = getPlayerState(eventInfo.eventPlayer).isOutOfBounds;
-        return;
-
-        getPlayerState(eventInfo.eventPlayer).isOutOfBounds = false;
-        mod.SkipManDown(eventInfo.eventPlayer, false)
+        if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
+            getPlayerState(eventInfo.eventPlayer).isOutOfBounds = false;
+            mod.SkipManDown(eventInfo.eventPlayer, false)
+        }
     }
 
     async onJoin(player: mod.Player): Promise<void> {
@@ -1968,7 +1966,7 @@ class ConquestGame {
             mod.EnableVFX(mod.GetVFX(i), true)
         }
         while (isGameOngoing) {
-            for (let i = 10; i < 0; i += -2) {
+            for (let i = 10; i > 0; i -= 2) {
                 capturePointFlash = i / 10;
                 await mod.Wait(0.1)
             }
