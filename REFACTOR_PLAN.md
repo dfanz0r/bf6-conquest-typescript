@@ -178,8 +178,9 @@ class PlayerState {
     currentCapturePoint: mod.CapturePoint | null = null;
     capturePointState = 0;
     flagOwner: mod.Team | null = null;
-    captureTick = -1;
-    isOnPoint = false;
+    captureProgressTick = 0;
+    outOfBoundsCountdown = -1;
+    captureSessionActive = false;
 
     isOutOfBounds = false;
     ignoreOOB = false;
@@ -730,9 +731,9 @@ Replace all `mod.ObjectVariable(player, SomePlayerVar)` patterns with `getPlayer
 | `ScorePlayerVar` | 11 | `score` | `number` |
 | `AI_InActionPlayerVar` | 12 | `aiInAction` | `boolean` |
 | `PlayerKillsPlayerVar` | 13 | `kills` | `number` |
-| `OnPointPlayerVar` | 14 | `isOnPoint` | `boolean` |
+| `OnPointPlayerVar` | 14 | `captureSessionActive` | `boolean` |
 | `StartPositionPlayerVar` | 15 | `startPosition` | `Vector \| null` |
-| `CaptureTickPlayerVar` | 16 | `captureTick` | `number` |
+| `CaptureTickPlayerVar` | 16 | `captureProgressTick` / `outOfBoundsCountdown` | split counter fields |
 | `AI_SpawnPlayerVar` | 17 | `aiSpawnPoints` | `CapturePoint[]` or `mod.Array` during transition |
 | `IgnoreOOBPlayerVar` | 18 | `ignoreOOB` | `boolean` |
 
@@ -743,8 +744,9 @@ function initPlayerState(player: mod.Player): PlayerState {
     const state = getPlayerState(player);
     playerById.set(mod.GetObjId(player), player);
 
-    state.captureTick = -1;
-    state.isOnPoint = false;
+    state.captureProgressTick = 0;
+    state.outOfBoundsCountdown = -1;
+    state.captureSessionActive = false;
     state.isOutOfBounds = false;
     state.ignoreOOB = false;
     state.aiInAction = false;
@@ -1294,6 +1296,129 @@ Only after OO migration is complete, address existing behavior bugs or suspiciou
 - any visual defaults that were previously undefined but now explicit
 
 Keep this separate from refactor phases so behavior changes are intentional and testable.
+
+---
+
+## Phase 18: Rule Trigger Simplification
+
+The `*Rule` wrappers still expose the old generated-rule shape. They now hide condition-slot lookup internally, but many wrappers still perform edge detection on conditions that are always `true`:
+
+```ts
+function initGameSettingsRule() {
+    const condition = getGlobalCondition(GlobalConditionSlot.InitGameSettings);
+    const state = true;
+    if (condition.update(state)) {
+        conquestGame.initGameSettings();
+    }
+}
+```
+
+This is not a meaningful gameplay condition. It is an initialization/lifecycle action that should be expressed directly.
+
+### Phase 18a: Remove always-true wrappers where the event is already one-shot
+
+Start with wrappers whose `newState` is always `true` and whose exported event is naturally one-shot or discrete.
+
+Candidate wrappers:
+
+```ts
+initGameSettingsRule()
+setupMapRule()
+processReviveRule(eventInfo)
+handlePlayerDeathRule(eventInfo)
+addEquipmentRule(eventInfo)
+handlePlayerJoinRule(eventInfo)
+handleCapturePointCapturedRule(eventInfo)
+handleTeamSwitchAndRepelRule(eventInfo)
+runCaptureProgressRule(eventInfo)
+```
+
+Migration strategy:
+
+1. Move any deliberate waits into the controller method if they belong to the behavior.
+   - Example: the `await mod.Wait(0.2)` before capture handling should become part of `CapturePointController.onCaptured(...)` if the wrapper is removed.
+2. Replace event-handler calls with direct controller calls.
+   - `initGameSettingsRule()` becomes `conquestGame.initGameSettings()` in `OngoingGlobal()` or, preferably, an explicit startup helper.
+   - `setupMapRule()` becomes `conquestGame.setupMap()` in `OnGameModeStarted()`.
+3. Delete the wrapper after the direct call compiles.
+4. Run TypeScript after each small group.
+
+Important: Do not blindly remove all always-true wrappers at once. Some event handlers may fire repeatedly in Portal, and the old rising-edge `ConditionState` may have been suppressing duplicate async loops. For each wrapper, verify whether the exported Portal event is one-shot, discrete, or ongoing.
+
+### Phase 18b: Introduce explicit startup/lifecycle state
+
+`initGameSettingsRule()` is really a startup initialization guard, not a rule. Replace it with explicit lifecycle state.
+
+Recommended shape:
+
+```ts
+let gameSettingsInitialized = false;
+
+function ensureGameSettingsInitialized(): void {
+    if (gameSettingsInitialized) return;
+    conquestGame.initGameSettings();
+    gameSettingsInitialized = true;
+}
+```
+
+Then `OngoingGlobal()` can call:
+
+```ts
+ensureGameSettingsInitialized();
+```
+
+This says what the code means without consuming a rule condition slot.
+
+Be careful with match restarts. If Portal reuses script state across rounds, reset this flag at the correct lifecycle boundary before starting a new match.
+
+### Phase 18c: Keep edge-detection only where it is semantically needed
+
+Wrappers with real changing conditions may still need rising-edge behavior:
+
+```ts
+updateScoreTimeRule()
+trackScoreRule()
+playNearEndMusicRule()
+endGameRule()
+notifyCaptureRule(eventInfo)
+showCaptureUIRule(eventInfo)
+hideCaptureUIRule(eventInfo)
+aiTargetDamagerRule(eventInfo)
+```
+
+For these, either keep the wrapper or replace it with a clearer helper such as:
+
+```ts
+function runRisingEdgeRule(
+    edge: ConditionState,
+    state: () => boolean,
+    action: () => void | Promise<void>,
+): void {
+    if (edge.update(state())) {
+        action();
+    }
+}
+```
+
+Do not remove edge detection from ongoing/tick rules unless the action is idempotent or intentionally should run every tick.
+
+### Phase 18d: Rename the abstraction if it remains
+
+If `ConditionState` remains after cleanup, rename it to clarify behavior:
+
+- `ConditionState` → `RisingEdgeState`
+- `Conditions` → `RisingEdgeStore`
+- `getPlayerCondition(...)` → `getPlayerRisingEdge(...)`
+
+This makes it clear that the state is not a generic condition; it is a false→true trigger.
+
+Deliverable:
+
+- startup actions use explicit lifecycle guards, not always-true rule wrappers
+- one-shot/discrete event actions call controllers directly where safe
+- rising-edge state remains only for rules that actually need false→true edge detection
+- exported event handlers remain the only exports
+- TypeScript compiles after each small cleanup pass
 
 ---
 
