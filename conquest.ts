@@ -180,7 +180,11 @@ const botNames: string[] = [
 // Player State
 
 class PlayerState {
-    constructor(public player: mod.Player) {}
+    team: mod.Team;
+
+    constructor(public player: mod.Player) {
+        this.team = mod.GetTeam(player);
+    }
 
     uniqueUiId = "";
     score = 0;
@@ -193,8 +197,9 @@ class PlayerState {
     currentCapturePoint: mod.CapturePoint | null = null;
     capturePointState = 0;
     flagOwner: mod.Team | null = null;
-    captureTick = -1;
-    isOnPoint = false;
+    captureProgressTick = 0;
+    outOfBoundsCountdown = -1;
+    captureSessionActive = false;
 
     isOutOfBounds = false;
     ignoreOOB = false;
@@ -291,6 +296,12 @@ function getPlayerState(player: mod.Player): PlayerState {
         // Handles can be fresh/opaque. Keep latest handle.
         state.player = player;
     }
+    return state;
+}
+
+function updatePlayerTeam(player: mod.Player): PlayerState {
+    const state = getPlayerState(player);
+    state.team = mod.GetTeam(player);
     return state;
 }
 
@@ -412,8 +423,10 @@ function initPlayerState(player: mod.Player): PlayerState {
     const state = getPlayerState(player);
     playerById.set(mod.GetObjId(player), player);
 
-    state.captureTick = -1;
-    state.isOnPoint = false;
+    state.team = mod.GetTeam(player);
+    state.captureProgressTick = 0;
+    state.outOfBoundsCountdown = -1;
+    state.captureSessionActive = false;
     state.isOutOfBounds = false;
     state.ignoreOOB = false;
     state.aiInAction = false;
@@ -769,7 +782,7 @@ class UIController {
         mod.AddUIContainer("ObjProgress", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.Solid, player)
         mod.AddUIText("OOBBackground", mod.CreateVector(0, 0, 0), mod.CreateVector(5000, 5000, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0.9, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, player)
         mod.AddUIText("OOBText", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, enemyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message("Return To Combat"), 56, enemyTextColour, 1, mod.UIAnchor.TopCenter, player)
-        mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", getPlayerState(player).captureTick), 72, enemyTextColour, 1, mod.UIAnchor.BottomCenter, player)
+        mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId), false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", getPlayerState(player).outOfBoundsCountdown), 72, enemyTextColour, 1, mod.UIAnchor.BottomCenter, player)
     }
 
     togglePlayerCaptureUI(enabled: boolean, eventInfo: PlayerCapturePointEventInfo): void {
@@ -835,10 +848,10 @@ class UIController {
         }
         this.updateObjectiveUI(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).capMessage(mod.GetObjId(eventInfo.eventCapturePoint)), eventInfo)
         if (mod.NotEqualTo(getPlayerState(eventInfo.eventPlayer).capturePointState, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
-            getPlayerState(eventInfo.eventPlayer).captureTick += 1;
+            getPlayerState(eventInfo.eventPlayer).captureProgressTick += 1;
             if (mod.Equals(
                 mod.Modulo(
-                    getPlayerState(eventInfo.eventPlayer).captureTick,
+                    getPlayerState(eventInfo.eventPlayer).captureProgressTick,
                     10),
                 0)) {
                 if (mod.GreaterThan(
@@ -862,7 +875,7 @@ class UIController {
                 }
             }
         } else {
-            getPlayerState(eventInfo.eventPlayer).captureTick = 0;
+            getPlayerState(eventInfo.eventPlayer).captureProgressTick = 0;
         }
     }
 
@@ -1045,7 +1058,7 @@ class PlayerController {
             getTeamState(mod.GetTeam(eventInfo.eventPlayer)).score -= 1;
         }
         getPlayerState(eventInfo.eventPlayer).deaths += 1;
-        getPlayerState(eventInfo.eventPlayer).isOnPoint = false;
+        getPlayerState(eventInfo.eventPlayer).captureSessionActive = false;
         uiController.updatePlayerScoreboard(eventInfo.eventPlayer)
         uiController.updateScoreboard()
     }
@@ -1207,8 +1220,8 @@ class PlayerController {
             getPlayerState(eventInfo.eventPlayer).isOutOfBounds = true;
             mod.SkipManDown(eventInfo.eventPlayer, true)
             if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier)) {
-                for (let CaptureTickVar = 10; CaptureTickVar >= 0; CaptureTickVar -= 1) {
-                    getPlayerState(eventInfo.eventPlayer).captureTick = CaptureTickVar;;
+                for (let countdown = 10; countdown >= 0; countdown -= 1) {
+                    getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown = countdown;
                     await mod.Wait(1)
                     if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
                         break
@@ -1219,12 +1232,12 @@ class PlayerController {
                         mod.DealDamage(eventInfo.eventPlayer, 10000, eventInfo.eventPlayer)
                     }
                 }
-                getPlayerState(eventInfo.eventPlayer).captureTick = -1;
+                getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown = -1;
             } else {
                 uiController.togglePlayerOOBUI(true, eventInfo)
-                for (let CaptureTickVar = 10; CaptureTickVar >= 0; CaptureTickVar -= 1) {
-                    getPlayerState(eventInfo.eventPlayer).captureTick = CaptureTickVar;;
-                    uiController.updateOOBUI(eventInfo.eventPlayer, getPlayerState(eventInfo.eventPlayer).captureTick)
+                for (let countdown = 10; countdown >= 0; countdown -= 1) {
+                    getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown = countdown;
+                    uiController.updateOOBUI(eventInfo.eventPlayer, getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown)
                     mod.PlaySound(audio.oobSound!, 0.7, eventInfo.eventPlayer)
                     await mod.Wait(1)
                     if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
@@ -1235,7 +1248,7 @@ class PlayerController {
                     mod.DealDamage(eventInfo.eventPlayer, 10000, eventInfo.eventPlayer)
                 }
                 uiController.togglePlayerOOBUI(false, eventInfo)
-                getPlayerState(eventInfo.eventPlayer).captureTick = -1;
+                getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown = -1;
             }
         }
     }
@@ -1254,8 +1267,9 @@ class PlayerController {
     }
 
     async onJoin(player: mod.Player): Promise<void> {
-        getPlayerState(player).captureTick = -1;
-        getPlayerState(player).isOnPoint = false;
+        getPlayerState(player).captureProgressTick = 0;
+        getPlayerState(player).outOfBoundsCountdown = -1;
+        getPlayerState(player).captureSessionActive = false;
         getPlayerState(player).isOutOfBounds = false;
         getPlayerState(player).ignoreOOB = false;
         getPlayerState(player).aiInAction = false;
@@ -1470,101 +1484,98 @@ class CapturePointController {
     }
 
     shouldShowCaptureUI(eventInfo: PlayerCapturePointEventInfo): boolean {
-        return mod.Not(getPlayerState(eventInfo.eventPlayer).isOnPoint);
+        return !getPlayerState(eventInfo.eventPlayer).captureSessionActive;
     }
 
     shouldHideCaptureUI(eventInfo: PlayerCapturePointEventInfo): boolean {
-        return getPlayerState(eventInfo.eventPlayer).isOnPoint;
+        return getPlayerState(eventInfo.eventPlayer).captureSessionActive;
     }
 
     shouldUpdatePlayerCountOnDeath(eventInfo: PlayerEventInfo): boolean {
-        return getPlayerState(eventInfo.eventPlayer).isOnPoint;
+        return getPlayerState(eventInfo.eventPlayer).captureSessionActive;
     }
 
     shouldUpdatePlayerCountOnRevive(eventInfo: PlayerEventInfo): boolean {
-        return getPlayerState(eventInfo.eventPlayer).isOnPoint;
+        return getPlayerState(eventInfo.eventPlayer).captureSessionActive;
+    }
+
+    private updatePlayersOnPointCounts(capturePoint: mod.CapturePoint, playerTeam: mod.Team): void {
+        const teamState = getTeamState(playerTeam);
+        const playersOnPoint = mod.GetPlayersOnPoint(capturePoint);
+
+        this.updatePlayersOnPointForTeam(capturePoint, playerTeam, playersOnPoint);
+        this.updatePlayersOnPointForTeam(capturePoint, teamState.otherTeam, playersOnPoint);
+    }
+
+    private updatePlayersOnPointForTeam(capturePoint: mod.CapturePoint, team: mod.Team, playersOnPoint = mod.GetPlayersOnPoint(capturePoint)): void {
+        const capturePointId = mod.GetObjId(capturePoint);
+        getTeamState(team).playersOnPoints.set(capturePointId, this.countAlivePlayersOnPointForTeam(playersOnPoint, team))
+    }
+
+    private countAlivePlayersOnPointForTeam(playersOnPoint: mod.Array, team: mod.Team): number {
+        return mod.CountOf(filterModArray(playersOnPoint, (player: any) => this.isValidAlivePlayerOnTeam(player, team)))
+    }
+
+    private isValidAlivePlayerOnTeam(player: mod.Player, team: mod.Team): boolean {
+        return mod.IsPlayerValid(player) &&
+            mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive) &&
+            mod.Equals(mod.GetTeam(player), team);
     }
 
     async showCaptureUI(eventInfo: PlayerCapturePointEventInfo): Promise<void> {
-        getPlayerState(eventInfo.eventPlayer).currentCapturePoint = eventInfo.eventCapturePoint;
-        getPlayerState(eventInfo.eventPlayer).capturePointState = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
-        getPlayerState(eventInfo.eventPlayer).flagOwner = mod.GetTeam(3);
-        const validPlayersOnPoint = filterModArray(
-            mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
-            (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
-        getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.set(mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
-            validPlayersOnPoint,
-            (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
-                mod.Equals(
-                    mod.GetTeam(currentArrayElement),
-                    mod.GetTeam(eventInfo.eventPlayer)))))
-        getTeamState(getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam).playersOnPoints.set(mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
-            validPlayersOnPoint,
-            (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
-                mod.Equals(
-                    mod.GetTeam(currentArrayElement),
-                    getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam))))
+        const player = eventInfo.eventPlayer;
+        const capturePoint = eventInfo.eventCapturePoint;
+        const playerState = getPlayerState(player);
+        const playerTeam = playerState.team;
+
+        playerState.currentCapturePoint = capturePoint;
+        playerState.capturePointState = mod.GetCaptureProgress(capturePoint);
+        playerState.flagOwner = mod.GetTeam(3);
+
+        this.updatePlayersOnPointCounts(capturePoint, playerTeam);
+
         await mod.Wait(0.05)
-        uiController.manageCapturePointUI(eventInfo.eventCapturePoint, getPlayerState(eventInfo.eventPlayer).capturePointState, eventInfo)
-        getPlayerState(eventInfo.eventPlayer).isOnPoint = true;
-        if (mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier))) {
-            getPlayerState(eventInfo.eventPlayer).captureTick = 9;
-            while (getPlayerState(eventInfo.eventPlayer).isOnPoint) {
-                if (mod.Not(mod.IsPlayerValid(eventInfo.eventPlayer))) {
+        uiController.manageCapturePointUI(capturePoint, playerState.capturePointState, eventInfo)
+        playerState.captureSessionActive = true;
+
+        if (!mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier)) {
+            playerState.captureProgressTick = 9;
+            while (playerState.captureSessionActive) {
+                if (!mod.IsPlayerValid(player)) {
                     break
                 }
-                if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive)) {
+                if (mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive)) {
                     uiController.togglePlayerCaptureUI(true, eventInfo)
                     uiController.updatePlayerCaptureUI(eventInfo)
                 } else {
                     uiController.togglePlayerCaptureUI(false, eventInfo)
                 }
-                getPlayerState(eventInfo.eventPlayer).capturePointState = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
-                getPlayerState(eventInfo.eventPlayer).flagOwner = mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint);
-                while (getPlayerState(eventInfo.eventPlayer).isOnPoint) { await mod.Wait(0.1) }
+                playerState.capturePointState = mod.GetCaptureProgress(capturePoint);
+                playerState.flagOwner = mod.GetCurrentOwnerTeam(capturePoint);
+
+                while (playerState.captureSessionActive) {
+                    await mod.Wait(0.1)
+                }
             }
-            getPlayerState(eventInfo.eventPlayer).captureTick = -1;
+            playerState.captureProgressTick = 0;
             uiController.togglePlayerCaptureUI(false, eventInfo)
         }
     }
 
     hideCaptureUI(eventInfo: PlayerCapturePointEventInfo): void {
-        const validPlayersOnPoint = filterModArray(
-            mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
-            (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
-        getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.set(mod.GetObjId(eventInfo.eventCapturePoint), mod.CountOf(filterModArray(
-            validPlayersOnPoint,
-            (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
-                mod.Equals(
-                    mod.GetTeam(currentArrayElement),
-                    mod.GetTeam(eventInfo.eventPlayer)))))
-        getPlayerState(eventInfo.eventPlayer).isOnPoint = false;
+        const playerState = getPlayerState(eventInfo.eventPlayer);
+        this.updatePlayersOnPointForTeam(eventInfo.eventCapturePoint, playerState.team);
+        playerState.captureSessionActive = false;
     }
 
     updatePlayerCountOnDeath(eventInfo: PlayerEventInfo): void {
-        const cpId = mod.GetObjId(getPlayerState(eventInfo.eventPlayer).currentCapturePoint!);
-        const validPlayersOnPoint = filterModArray(
-            mod.GetPlayersOnPoint(getPlayerState(eventInfo.eventPlayer).currentCapturePoint!),
-            (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
-        getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.set(cpId, mod.CountOf(filterModArray(
-            validPlayersOnPoint,
-            (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
-                mod.Equals(
-                    mod.GetTeam(currentArrayElement),
-                    mod.GetTeam(eventInfo.eventPlayer)))))
+        const playerState = getPlayerState(eventInfo.eventPlayer);
+        this.updatePlayersOnPointForTeam(playerState.currentCapturePoint!, playerState.team);
     }
 
     updatePlayerCountOnRevive(eventInfo: PlayerEventInfo): void {
-        const cpId = mod.GetObjId(getPlayerState(eventInfo.eventPlayer).currentCapturePoint!);
-        const validPlayersOnPoint = filterModArray(
-            mod.GetPlayersOnPoint(getPlayerState(eventInfo.eventPlayer).currentCapturePoint!),
-            (currentArrayElement: any) => mod.IsPlayerValid(currentArrayElement));
-        getTeamState(mod.GetTeam(eventInfo.eventPlayer)).playersOnPoints.set(cpId, mod.CountOf(filterModArray(
-            validPlayersOnPoint,
-            (currentArrayElement: any) => mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive) &&
-                mod.Equals(
-                    mod.GetTeam(currentArrayElement),
-                    mod.GetTeam(eventInfo.eventPlayer)))))
+        const playerState = getPlayerState(eventInfo.eventPlayer);
+        this.updatePlayersOnPointForTeam(playerState.currentCapturePoint!, playerState.team);
     }
 }
 class AIController {
@@ -2558,6 +2569,7 @@ export function OnPlayerDied(eventPlayer: mod.Player, eventOtherPlayer: mod.Play
 
 export function OnPlayerDeployed(eventPlayer: mod.Player) {
     ensureStateInitialized();
+    updatePlayerTeam(eventPlayer);
     const eventInfo = { eventPlayer };
     addEquipmentRule(eventInfo);
     aiScoutOnDeployRule(eventInfo);
@@ -2566,12 +2578,14 @@ export function OnPlayerDeployed(eventPlayer: mod.Player) {
 
 export function OnPlayerJoinGame(eventPlayer: mod.Player) {
     ensureStateInitialized();
+    updatePlayerTeam(eventPlayer);
     const eventInfo = { eventPlayer };
     handlePlayerJoinRule(eventInfo);
 }
 
 export function OnPlayerUndeploy(eventPlayer: mod.Player) {
     ensureStateInitialized();
+    updatePlayerTeam(eventPlayer);
     const eventInfo = { eventPlayer };
     updateDeathOnUndeployRule(eventInfo);
 }
