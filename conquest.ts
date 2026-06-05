@@ -303,7 +303,10 @@ function getPlayerState(player: mod.Player): PlayerState {
 
 function updatePlayerTeam(player: mod.Player): PlayerState {
     const state = getPlayerState(player);
-    state.team = mod.GetTeam(player);
+    const team = mod.GetTeam(player);
+    if (tryGetTeamState(team)) {
+        state.team = team;
+    }
     return state;
 }
 
@@ -576,6 +579,15 @@ function filterModArray(array: mod.Array, predicate: (value: any) => boolean): m
         if (predicate(value)) result = mod.AppendToArray(result, value);
     }
     return result;
+}
+
+async function waitUntil(duration: number, condition: () => boolean, pollInterval = 0.05): Promise<void> {
+    let elapsed = 0;
+    while (elapsed < duration && !condition()) {
+        const waitTime = Math.min(pollInterval, duration - elapsed);
+        await mod.Wait(waitTime)
+        elapsed += waitTime;
+    }
 }
 
 function isTrueForAll(array: mod.Array, predicate: (value: any) => boolean): boolean {
@@ -1062,11 +1074,14 @@ class PlayerController {
     }
 
     onUndeploy(eventInfo: PlayerEventInfo): void {
-        if (FLAGS.PLAYER_DEATHS_BLEED) {
-            getTeamState(mod.GetTeam(eventInfo.eventPlayer)).score -= 1;
+        const playerState = getPlayerState(eventInfo.eventPlayer);
+        const teamState = tryGetTeamState(playerState.team);
+
+        if (FLAGS.PLAYER_DEATHS_BLEED && teamState) {
+            teamState.score -= 1;
         }
-        getPlayerState(eventInfo.eventPlayer).deaths += 1;
-        getPlayerState(eventInfo.eventPlayer).captureSessionActive = false;
+        playerState.deaths += 1;
+        playerState.captureSessionActive = false;
         uiController.updatePlayerScoreboard(eventInfo.eventPlayer)
         uiController.updateScoreboard()
     }
@@ -1230,7 +1245,7 @@ class PlayerController {
             if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier)) {
                 for (let countdown = 10; countdown >= 0; countdown -= 1) {
                     getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown = countdown;
-                    await mod.Wait(1)
+                    await waitUntil(1, () => !getPlayerState(eventInfo.eventPlayer).isOutOfBounds)
                     if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
                         break
                     }
@@ -1247,7 +1262,7 @@ class PlayerController {
                     getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown = countdown;
                     uiController.updateOOBUI(eventInfo.eventPlayer, getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown)
                     mod.PlaySound(audio.oobSound!, 0.7, eventInfo.eventPlayer)
-                    await mod.Wait(1)
+                    await waitUntil(1, () => !getPlayerState(eventInfo.eventPlayer).isOutOfBounds)
                     if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
                         break
                     }
@@ -1369,7 +1384,7 @@ class CapturePointController {
     }
 
     async runProgressLoop(eventInfo: CapturePointEventInfo): Promise<void> {
-        while (!isGameOngoing) { await mod.Wait(999) }
+        while (!isGameOngoing) { await waitUntil(999, () => isGameOngoing, 1) }
         if (FLAGS.CONQUEST_ASSAULT) {
             mod.SetCapturePointOwner(eventInfo.eventCapturePoint, mod.GetTeam(2))
         }
@@ -1539,6 +1554,7 @@ class CapturePointController {
         await mod.Wait(0.05)
         uiController.manageCapturePointUI(capturePoint, playerState.capturePointState, eventInfo)
         playerState.captureSessionActive = true;
+        getPlayerCondition(player, PlayerConditionSlot.ShowCaptureUI).update(false);
 
         if (!mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier)) {
             playerState.captureProgressTick = 9;
@@ -1554,11 +1570,10 @@ class CapturePointController {
                 }
                 playerState.capturePointState = mod.GetCaptureProgress(capturePoint);
                 playerState.flagOwner = mod.GetCurrentOwnerTeam(capturePoint);
-
-                while (playerState.captureSessionActive) {
-                    await mod.Wait(0.1)
-                }
+                await waitUntil(0.1, () => !playerState.captureSessionActive)
             }
+            playerState.captureSessionActive = false;
+            getPlayerCondition(player, PlayerConditionSlot.HideCaptureUI).update(false);
             playerState.captureProgressTick = 0;
             uiController.togglePlayerCaptureUI(false, eventInfo)
         }
@@ -1568,6 +1583,7 @@ class CapturePointController {
         const playerState = getPlayerState(eventInfo.eventPlayer);
         this.updatePlayersOnPointForTeam(eventInfo.eventCapturePoint, playerState.team);
         playerState.captureSessionActive = false;
+        getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HideCaptureUI).update(false);
     }
 
     updatePlayerCountOnDeath(eventInfo: PlayerEventInfo): void {
