@@ -385,6 +385,53 @@ let globalConditions = new Conditions();
 let playerConditions: Conditions[] = [];
 let capturePointConditions: Conditions[] = [];
 
+enum GlobalConditionSlot {
+    InitGameSettings = 0,
+    UpdateScoreTime = 1,
+    UpdateScoreTimeSecondaryTick = 2,
+    TrackScore = 3,
+    PlayNearEndMusic = 4,
+    EndGame = 5,
+    PlayVOLowTime = 6,
+    PlayVOWinning = 7,
+    PlayVOTeam2Winning = 8,
+    PlayVOLowTickets = 9,
+    PlayVOTeam2LowTickets = 10,
+    SetupMap = 11,
+}
+
+enum PlayerConditionSlot {
+    ProcessKill = 0,
+    AITargetOnKill = 1,
+    ProcessAssist = 2,
+    AITargetOnKillAssist = 3,
+    ProcessRevive = 4,
+    UpdatePlayerCountOnRevive = 5,
+    HandlePlayerDeath = 6,
+    UpdatePlayerCountOnDeath = 7,
+    AddEquipment = 8,
+    AIScoutOnDeploy = 9,
+    AIReadyForAttack = 10,
+    HandlePlayerJoin = 11,
+    UpdateDeathOnUndeploy = 12,
+    ShowCaptureUI = 13,
+    AIFindNewObjective = 14,
+    HideCaptureUI = 15,
+    HandleTeamSwitchAndRepel = 16,
+    EnterAreaTrigger = 17,
+    ExitAreaTrigger = 18,
+    AITargetDamager = 19,
+    AIExitVehicle = 20,
+    AIEnterVehicle = 21,
+    AIRetryMove = 22,
+}
+
+enum CapturePointConditionSlot {
+    HandleCaptured = 0,
+    NotifyCapture = 1,
+    RunProgressLoop = 2,
+}
+
 function getGlobalCondition(n: number): ConditionState {
     return globalConditions.getConditionState(n);
 }
@@ -2111,7 +2158,8 @@ const conquestGame = new ConquestGame();
 
 // ============================================================
 
-function initGameSettingsRule(conditionState: any) {
+function initGameSettingsRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.InitGameSettings);
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
@@ -2119,7 +2167,8 @@ function initGameSettingsRule(conditionState: any) {
     conquestGame.initGameSettings();
 }
 
-function setupMapRule(conditionState: any) {
+function setupMapRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.SetupMap);
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
@@ -2127,7 +2176,8 @@ function setupMapRule(conditionState: any) {
     conquestGame.setupMap();
 }
 
-function updateScoreTimeRule(conditionState: any) {
+function updateScoreTimeRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.UpdateScoreTime);
     let newState = conquestGame.shouldUpdateScoreTime();
     if (!conditionState.update(newState)) {
         return;
@@ -2135,7 +2185,8 @@ function updateScoreTimeRule(conditionState: any) {
     conquestGame.updateScoreTimeAndAI();
 }
 
-function updateScoreTimeSecondaryTickRule(conditionState: any) {
+function updateScoreTimeSecondaryTickRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.UpdateScoreTimeSecondaryTick);
     let newState = conquestGame.shouldUpdateScoreTimeOddTick();
     if (!conditionState.update(newState)) {
         return;
@@ -2143,7 +2194,8 @@ function updateScoreTimeSecondaryTickRule(conditionState: any) {
     conquestGame.updateScoreTimeAndAISecondaryTick();
 }
 
-function trackScoreRule(conditionState: any) {
+function trackScoreRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.TrackScore);
     let newState = conquestGame.shouldTrackScore();
     if (!conditionState.update(newState)) {
         return;
@@ -2151,7 +2203,8 @@ function trackScoreRule(conditionState: any) {
     conquestGame.trackScoreAndBleed();
 }
 
-function processKillRule(conditionState: any, eventInfo: any) {
+function processKillRule(eventInfo: PlayerCombatEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ProcessKill);
     let newState = playerController.shouldProcessKill(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2159,7 +2212,8 @@ function processKillRule(conditionState: any, eventInfo: any) {
     playerController.processKill(eventInfo);
 }
 
-function processAssistRule(conditionState: any, eventInfo: any) {
+function processAssistRule(eventInfo: PlayerCombatEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ProcessAssist);
     let newState = playerController.shouldProcessAssist(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2167,7 +2221,8 @@ function processAssistRule(conditionState: any, eventInfo: any) {
     playerController.processAssist(eventInfo);
 }
 
-function processReviveRule(conditionState: any, eventInfo: any) {
+function processReviveRule(eventInfo: PlayerCombatEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ProcessRevive);
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
@@ -2175,7 +2230,8 @@ function processReviveRule(conditionState: any, eventInfo: any) {
     playerController.processRevive(eventInfo);
 }
 
-function handlePlayerDeathRule(conditionState: any, eventInfo: any) {
+function handlePlayerDeathRule(eventInfo: PlayerCombatEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HandlePlayerDeath);
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
@@ -2183,7 +2239,8 @@ function handlePlayerDeathRule(conditionState: any, eventInfo: any) {
     playerController.handleDeath(eventInfo);
 }
 
-function addEquipmentRule(conditionState: any, eventInfo: any) {
+function addEquipmentRule(eventInfo: PlayerEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AddEquipment);
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
@@ -2191,7 +2248,8 @@ function addEquipmentRule(conditionState: any, eventInfo: any) {
     playerController.addEquipment(eventInfo.eventPlayer);
 }
 
-function handlePlayerJoinRule(conditionState: any, eventInfo: any) {
+function handlePlayerJoinRule(eventInfo: PlayerEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HandlePlayerJoin);
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
@@ -2199,7 +2257,8 @@ function handlePlayerJoinRule(conditionState: any, eventInfo: any) {
     playerController.onJoin(eventInfo.eventPlayer);
 }
 
-function updateDeathOnUndeployRule(conditionState: any, eventInfo: any) {
+function updateDeathOnUndeployRule(eventInfo: PlayerEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.UpdateDeathOnUndeploy);
     let newState = playerController.shouldUndeploy(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2207,7 +2266,8 @@ function updateDeathOnUndeployRule(conditionState: any, eventInfo: any) {
     playerController.onUndeploy(eventInfo);
 }
 
-async function handleCapturePointCapturedRule(conditionState: any, eventInfo: any) {
+async function handleCapturePointCapturedRule(eventInfo: CapturePointEventInfo) {
+    const conditionState = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.HandleCaptured);
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
@@ -2216,7 +2276,8 @@ async function handleCapturePointCapturedRule(conditionState: any, eventInfo: an
     capturePointController.onCaptured(eventInfo);
 }
 
-async function notifyCaptureRule(conditionState: any, eventInfo: any) {
+async function notifyCaptureRule(eventInfo: CapturePointEventInfo) {
+    const conditionState = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.NotifyCapture);
     let newState = capturePointController.shouldNotifyCapture(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2224,7 +2285,8 @@ async function notifyCaptureRule(conditionState: any, eventInfo: any) {
     await capturePointController.onCapturing(eventInfo);
 }
 
-function playNearEndMusicRule(conditionState: any) {
+function playNearEndMusicRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayNearEndMusic);
     let newState = conquestGame.shouldPlayNearEndMusic();
     if (!conditionState.update(newState)) {
         return;
@@ -2232,7 +2294,8 @@ function playNearEndMusicRule(conditionState: any) {
     conquestGame.playNearEndMusic();
 }
 
-function endGameRule(conditionState: any) {
+function endGameRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.EndGame);
     let newState = conquestGame.shouldEndGame();
     if (!conditionState.update(newState)) {
         return;
@@ -2240,7 +2303,8 @@ function endGameRule(conditionState: any) {
     conquestGame.endGame();
 }
 
-function showCaptureUIRule(conditionState: any, eventInfo: any) {
+function showCaptureUIRule(eventInfo: PlayerCapturePointEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ShowCaptureUI);
     let newState = capturePointController.shouldShowCaptureUI(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2248,8 +2312,8 @@ function showCaptureUIRule(conditionState: any, eventInfo: any) {
     capturePointController.showCaptureUI(eventInfo);
 }
 
-
-function hideCaptureUIRule(conditionState: any, eventInfo: any) {
+function hideCaptureUIRule(eventInfo: PlayerCapturePointEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HideCaptureUI);
     let newState = capturePointController.shouldHideCaptureUI(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2257,8 +2321,8 @@ function hideCaptureUIRule(conditionState: any, eventInfo: any) {
     capturePointController.hideCaptureUI(eventInfo);
 }
 
-
-function updatePlayerCountOnDeathRule(conditionState: any, eventInfo: any) {
+function updatePlayerCountOnDeathRule(eventInfo: PlayerEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.UpdatePlayerCountOnDeath);
     let newState = capturePointController.shouldUpdatePlayerCountOnDeath(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2266,8 +2330,8 @@ function updatePlayerCountOnDeathRule(conditionState: any, eventInfo: any) {
     capturePointController.updatePlayerCountOnDeath(eventInfo);
 }
 
-
-function updatePlayerCountOnReviveRule(conditionState: any, eventInfo: any) {
+function updatePlayerCountOnReviveRule(eventInfo: PlayerEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.UpdatePlayerCountOnRevive);
     let newState = capturePointController.shouldUpdatePlayerCountOnRevive(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2275,7 +2339,8 @@ function updatePlayerCountOnReviveRule(conditionState: any, eventInfo: any) {
     capturePointController.updatePlayerCountOnRevive(eventInfo);
 }
 
-function handleTeamSwitchAndRepelRule(conditionState: any, eventInfo: any) {
+function handleTeamSwitchAndRepelRule(eventInfo: { eventPlayer: mod.Player; eventInteractPoint: mod.InteractPoint }) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HandleTeamSwitchAndRepel);
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
@@ -2283,7 +2348,8 @@ function handleTeamSwitchAndRepelRule(conditionState: any, eventInfo: any) {
     playerController.handleTeamSwitchAndRepel(eventInfo);
 }
 
-function enterAreaTriggerRule(conditionState: any, eventInfo: any) {
+function enterAreaTriggerRule(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.EnterAreaTrigger);
     let newState = playerController.shouldEnterAreaTrigger(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2291,7 +2357,8 @@ function enterAreaTriggerRule(conditionState: any, eventInfo: any) {
     playerController.enterAreaTrigger(eventInfo);
 }
 
-function exitAreaTriggerRule(conditionState: any, eventInfo: any) {
+function exitAreaTriggerRule(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ExitAreaTrigger);
     let newState = playerController.shouldExitAreaTrigger(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2299,7 +2366,8 @@ function exitAreaTriggerRule(conditionState: any, eventInfo: any) {
     playerController.exitAreaTrigger(eventInfo);
 }
 
-function playVOLowTimeRule(conditionState: any) {
+function playVOLowTimeRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayVOLowTime);
     let newState = conquestGame.shouldPlayVOLowTime();
     if (!conditionState.update(newState)) {
         return;
@@ -2307,7 +2375,8 @@ function playVOLowTimeRule(conditionState: any) {
     conquestGame.playVOLowTime();
 }
 
-function playVOWinningRule(conditionState: any) {
+function playVOWinningRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayVOWinning);
     let newState = conquestGame.shouldPlayVOWinning();
     if (!conditionState.update(newState)) {
         return;
@@ -2315,7 +2384,8 @@ function playVOWinningRule(conditionState: any) {
     conquestGame.playVOWinning();
 }
 
-function playVOTeam2WinningRule(conditionState: any) {
+function playVOTeam2WinningRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayVOTeam2Winning);
     let newState = conquestGame.shouldPlayVOTeam2Winning();
     if (!conditionState.update(newState)) {
         return;
@@ -2323,7 +2393,8 @@ function playVOTeam2WinningRule(conditionState: any) {
     conquestGame.playVOTeam2Winning();
 }
 
-function playVOLowTicketsRule(conditionState: any) {
+function playVOLowTicketsRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayVOLowTickets);
     let newState = conquestGame.shouldPlayVOLowTickets();
     if (!conditionState.update(newState)) {
         return;
@@ -2331,7 +2402,8 @@ function playVOLowTicketsRule(conditionState: any) {
     conquestGame.playVOLowTickets();
 }
 
-function playVOTeam2LowTicketsRule(conditionState: any) {
+function playVOTeam2LowTicketsRule() {
+    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayVOTeam2LowTickets);
     let newState = conquestGame.shouldPlayVOTeam2LowTickets();
     if (!conditionState.update(newState)) {
         return;
@@ -2339,7 +2411,8 @@ function playVOTeam2LowTicketsRule(conditionState: any) {
     conquestGame.playVOTeam2LowTickets();
 }
 
-function runCaptureProgressRule(conditionState: any, eventInfo: any) {
+function runCaptureProgressRule(eventInfo: CapturePointEventInfo) {
+    const conditionState = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.RunProgressLoop);
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
@@ -2347,7 +2420,8 @@ function runCaptureProgressRule(conditionState: any, eventInfo: any) {
     capturePointController.runProgressLoop(eventInfo);
 }
 
-function aiScoutOnDeployRule(conditionState: any, eventInfo: any) {
+function aiScoutOnDeployRule(eventInfo: PlayerEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIScoutOnDeploy);
     let newState = aiController.shouldScoutOnDeploy(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2355,7 +2429,8 @@ function aiScoutOnDeployRule(conditionState: any, eventInfo: any) {
     aiController.deployScout(eventInfo);
 }
 
-function aiFindNewObjectiveRule(conditionState: any, eventInfo: any) {
+function aiFindNewObjectiveRule(eventInfo: PlayerCapturePointEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIFindNewObjective);
     let newState = aiController.shouldFindNewObjective(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2363,7 +2438,8 @@ function aiFindNewObjectiveRule(conditionState: any, eventInfo: any) {
     aiController.findNewObjective(eventInfo);
 }
 
-function aiReadyForAttackRule(conditionState: any, eventInfo: any) {
+function aiReadyForAttackRule(eventInfo: PlayerEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIReadyForAttack);
     let newState = aiController.shouldReadyForAttack(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2371,7 +2447,8 @@ function aiReadyForAttackRule(conditionState: any, eventInfo: any) {
     aiController.readyForAttack(eventInfo);
 }
 
-function aiTargetDamagerRule(conditionState: any, eventInfo: any) {
+function aiTargetDamagerRule(eventInfo: PlayerCombatEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetDamager);
     let newState = aiController.shouldTargetDamager(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2379,7 +2456,8 @@ function aiTargetDamagerRule(conditionState: any, eventInfo: any) {
     aiController.targetDamager(eventInfo);
 }
 
-function aiExitVehicleRule(conditionState: any, eventInfo: any) {
+function aiExitVehicleRule(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIExitVehicle);
     let newState = aiController.shouldExitVehicle(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2387,7 +2465,8 @@ function aiExitVehicleRule(conditionState: any, eventInfo: any) {
     aiController.exitVehicle(eventInfo);
 }
 
-function aiEnterVehicleRule(conditionState: any, eventInfo: any) {
+function aiEnterVehicleRule(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIEnterVehicle);
     let newState = aiController.shouldEnterVehicle(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2395,7 +2474,8 @@ function aiEnterVehicleRule(conditionState: any, eventInfo: any) {
     aiController.enterVehicle(eventInfo);
 }
 
-function aiRetryMoveRule(conditionState: any, eventInfo: any) {
+function aiRetryMoveRule(eventInfo: PlayerEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIRetryMove);
     let newState = aiController.shouldRetryMove(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2403,7 +2483,8 @@ function aiRetryMoveRule(conditionState: any, eventInfo: any) {
     aiController.retryMove(eventInfo);
 }
 
-function aiTargetOnKillRule(conditionState: any, eventInfo: any) {
+function aiTargetOnKillRule(eventInfo: PlayerCombatEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetOnKill);
     let newState = aiController.shouldTargetOnKill(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2411,7 +2492,8 @@ function aiTargetOnKillRule(conditionState: any, eventInfo: any) {
     aiController.targetOnKill(eventInfo);
 }
 
-function aiTargetOnKillAssistRule(conditionState: any, eventInfo: any) {
+function aiTargetOnKillAssistRule(eventInfo: PlayerCombatEventInfo) {
+    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetOnKillAssist);
     let newState = aiController.shouldTargetOnKillAssist(eventInfo);
     if (!conditionState.update(newState)) {
         return;
@@ -2525,166 +2607,143 @@ function initFlagCalls() {
 
 export function OngoingGlobal() {
     ensureStateInitialized();
-    const eventInfo = {};
-    let eventNum = 0;
-    initGameSettingsRule(getGlobalCondition(eventNum++));
-    updateScoreTimeRule(getGlobalCondition(eventNum++));
-    updateScoreTimeSecondaryTickRule(getGlobalCondition(eventNum++));
-    trackScoreRule(getGlobalCondition(eventNum++));
-    playNearEndMusicRule(getGlobalCondition(eventNum++));
-    endGameRule(getGlobalCondition(eventNum++));
-    playVOLowTimeRule(getGlobalCondition(eventNum++));
-    playVOWinningRule(getGlobalCondition(eventNum++));
-    playVOTeam2WinningRule(getGlobalCondition(eventNum++));
-    playVOLowTicketsRule(getGlobalCondition(eventNum++));
-    playVOTeam2LowTicketsRule(getGlobalCondition(eventNum++));
+    initGameSettingsRule();
+    updateScoreTimeRule();
+    updateScoreTimeSecondaryTickRule();
+    trackScoreRule();
+    playNearEndMusicRule();
+    endGameRule();
+    playVOLowTimeRule();
+    playVOWinningRule();
+    playVOTeam2WinningRule();
+    playVOLowTicketsRule();
+    playVOTeam2LowTicketsRule();
 }
 
 export function OnGameModeStarted() {
     ensureStateInitialized();
-    const eventInfo = {};
-    let eventNum = 11;
-    setupMapRule(getGlobalCondition(eventNum++));
+    setupMapRule();
 }
 
 export function OnPlayerEarnedKill(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDeathType: mod.DeathType, eventWeaponUnlock: mod.WeaponUnlock) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDeathType, eventWeaponUnlock };
-    let eventNum = 0;
-    processKillRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    aiTargetOnKillRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    processKillRule(eventInfo);
+    aiTargetOnKillRule(eventInfo);
 }
 
 export function OnPlayerEarnedKillAssist(eventPlayer: mod.Player, eventOtherPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer };
-    let eventNum = 2;
-    processAssistRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    aiTargetOnKillAssistRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    processAssistRule(eventInfo);
+    aiTargetOnKillAssistRule(eventInfo);
 }
 
 export function OnRevived(eventPlayer: mod.Player, eventOtherPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer };
-    let eventNum = 4;
-    processReviveRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    updatePlayerCountOnReviveRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    processReviveRule(eventInfo);
+    updatePlayerCountOnReviveRule(eventInfo);
 }
 
 export function OnPlayerDied(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDeathType: mod.DeathType, eventWeaponUnlock: mod.WeaponUnlock) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDeathType, eventWeaponUnlock };
-    let eventNum = 6;
-    handlePlayerDeathRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    updatePlayerCountOnDeathRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    handlePlayerDeathRule(eventInfo);
+    updatePlayerCountOnDeathRule(eventInfo);
 }
 
 export function OnPlayerDeployed(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
-    let eventNum = 8;
-    addEquipmentRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    aiScoutOnDeployRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    aiReadyForAttackRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    addEquipmentRule(eventInfo);
+    aiScoutOnDeployRule(eventInfo);
+    aiReadyForAttackRule(eventInfo);
 }
 
 export function OnPlayerJoinGame(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
-    let eventNum = 11;
-    handlePlayerJoinRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    handlePlayerJoinRule(eventInfo);
 }
 
 export function OnPlayerUndeploy(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
-    let eventNum = 12;
-    updateDeathOnUndeployRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    updateDeathOnUndeployRule(eventInfo);
 }
 
 export function OnCapturePointCaptured(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint };
-    let eventNum = 0;
-    handleCapturePointCapturedRule(getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
+    handleCapturePointCapturedRule(eventInfo);
 }
 
 export function OnCapturePointCapturing(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint };
-    let eventNum = 1;
-    notifyCaptureRule(getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
+    notifyCaptureRule(eventInfo);
 }
 
 export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventCapturePoint };
-    let eventNum = 13;
-    showCaptureUIRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
-    aiFindNewObjectiveRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    showCaptureUIRule(eventInfo);
+    aiFindNewObjectiveRule(eventInfo);
 }
 
 export function OnPlayerExitCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventCapturePoint };
-    let eventNum = 15;
-    hideCaptureUIRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    hideCaptureUIRule(eventInfo);
 }
 
 export function OnPlayerInteract(eventPlayer: mod.Player, eventInteractPoint: mod.InteractPoint) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventInteractPoint };
-    let eventNum = 16;
-    handleTeamSwitchAndRepelRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    handleTeamSwitchAndRepelRule(eventInfo);
 }
 
 export function OnPlayerEnterAreaTrigger(eventPlayer: mod.Player, eventAreaTrigger: mod.AreaTrigger) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventAreaTrigger };
-    let eventNum = 17;
-    enterAreaTriggerRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    enterAreaTriggerRule(eventInfo);
 }
 
 export function OnPlayerExitAreaTrigger(eventPlayer: mod.Player, eventAreaTrigger: mod.AreaTrigger) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventAreaTrigger };
-    let eventNum = 18;
-    exitAreaTriggerRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    exitAreaTriggerRule(eventInfo);
 }
 
 export function OngoingCapturePoint(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint: eventCapturePoint };
-    let eventNum = 2;
-    runCaptureProgressRule(getCapturePointCondition(eventCapturePoint, eventNum++), eventInfo);
+    runCaptureProgressRule(eventInfo);
 }
 
 export function OnPlayerDamaged(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDamageType: mod.DamageType, eventWeaponUnlock: mod.WeaponUnlock) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventOtherPlayer, eventDamageType, eventWeaponUnlock };
-    let eventNum = 19;
-    aiTargetDamagerRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiTargetDamagerRule(eventInfo);
 }
 
 export function OnPlayerExitVehicle(eventPlayer: mod.Player, eventVehicle: mod.Vehicle) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventVehicle };
-    let eventNum = 20;
-    aiExitVehicleRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiExitVehicleRule(eventInfo);
 }
 
 export function OnPlayerEnterVehicle(eventPlayer: mod.Player, eventVehicle: mod.Vehicle) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventVehicle };
-    let eventNum = 21;
-    aiEnterVehicleRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiEnterVehicleRule(eventInfo);
 }
 
 export function OnAIMoveToFailed(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
-    let eventNum = 22;
-    aiRetryMoveRule(getPlayerCondition(eventPlayer, eventNum++), eventInfo);
+    aiRetryMoveRule(eventInfo);
 }
 
 export function OnPlayerLeaveGame(eventNumber: number) {
