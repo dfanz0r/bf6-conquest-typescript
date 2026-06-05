@@ -1177,7 +1177,7 @@ class PlayerController {
                 await mod.Wait(5)
                 if (isGameOngoing) {
                     await mod.Wait(0.1)
-                    resetFX({ eventPlayer: player })
+                    conquestGame.resetFX({ eventPlayer: player })
                 }
             }
         }
@@ -1663,7 +1663,356 @@ class AIController {
         }
     }
 }
-class ConquestGame {}
+class ConquestGame {
+    shouldUpdateScoreTime(): boolean {
+        return isGameOngoing && mod.Equals(
+            mod.Modulo(
+                mod.RoundToInteger(mod.GetMatchTimeElapsed()),
+                2),
+            0);
+    }
+
+    shouldUpdateScoreTimeOddTick(): boolean {
+        return isGameOngoing && mod.Equals(
+            mod.Modulo(
+                mod.RoundToInteger(mod.GetMatchTimeElapsed()),
+                2),
+            1);
+    }
+
+    shouldTrackScore(): boolean {
+        return isGameOngoing && mod.Equals(
+            mod.Modulo(
+                mod.RoundToInteger(mod.GetMatchTimeElapsed()),
+                CONFIG.TICKET_BLEED_SPEED),
+            0);
+    }
+
+    shouldPlayNearEndMusic(): boolean {
+        return isGameOngoing && (mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 60) ||
+            mod.LessThanEqualTo(getTeamState(TEAM_1).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD) ||
+            mod.LessThanEqualTo(getTeamState(TEAM_2).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD));
+    }
+
+    shouldEndGame(): boolean {
+        return isGameOngoing && (mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 1) ||
+            mod.LessThanEqualTo(getTeamState(TEAM_1).score, 0) ||
+            mod.LessThanEqualTo(getTeamState(TEAM_2).score, 0));
+    }
+
+    async updateScoreTimeAndAI(): Promise<void> {
+        uiController.updateScoreboard()
+        aiController.addAI()
+        await mod.Wait(0.1)
+        aiController.addAI()
+        this.checkConquestAssaultWin()
+    }
+
+    async updateScoreTimeAndAISecondaryTick(): Promise<void> {
+        uiController.updateScoreboard()
+        aiController.addAI()
+        await mod.Wait(0.1)
+        aiController.addAI()
+    }
+
+    trackScoreAndBleed(): void {
+        if (FLAGS.TOTAL_CONTROL_TICKET_BLEED) {
+            if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
+                mod.GetCurrentOwnerTeam(currentArrayElement),
+                mod.GetTeam(1)))) {
+                getTeamState(TEAM_2).score -= CONFIG.TOTAL_CONTROL_BONUS;
+            } else if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
+                mod.GetCurrentOwnerTeam(currentArrayElement),
+                mod.GetTeam(2)))) {
+                getTeamState(TEAM_1).score -= CONFIG.TOTAL_CONTROL_BONUS;
+            } else {
+            }
+        }
+        if (FLAGS.LOSER_ONLY_TICKET_BLEED) {
+            if (mod.GreaterThan(
+                mod.CountOf(filterModArray(
+                    mod.AllCapturePoints(),
+                    (currentArrayElement: any) => mod.Equals(
+                        mod.GetCurrentOwnerTeam(currentArrayElement),
+                        mod.GetTeam(2)))),
+                mod.CountOf(filterModArray(
+                    mod.AllCapturePoints(),
+                    (currentArrayElement: any) => mod.Equals(
+                        mod.GetCurrentOwnerTeam(currentArrayElement),
+                        mod.GetTeam(1)))))) {
+                getTeamState(TEAM_1).score -=
+                    mod.Subtract(
+                        mod.CountOf(filterModArray(
+                            mod.AllCapturePoints(),
+                            (currentArrayElement: any) => mod.Equals(
+                                mod.GetCurrentOwnerTeam(currentArrayElement),
+                                mod.GetTeam(2)))),
+                        mod.CountOf(filterModArray(
+                            mod.AllCapturePoints(),
+                            (currentArrayElement: any) => mod.Equals(
+                                mod.GetCurrentOwnerTeam(currentArrayElement),
+                                mod.GetTeam(1)))));
+                uiController.updateScoreboard()
+                uiController.animateUIFlash("LeftFlash1", "RightFlash2")
+            }
+            if (mod.GreaterThan(
+                mod.CountOf(filterModArray(
+                    mod.AllCapturePoints(),
+                    (currentArrayElement: any) => mod.Equals(
+                        mod.GetCurrentOwnerTeam(currentArrayElement),
+                        mod.GetTeam(1)))),
+                mod.CountOf(filterModArray(
+                    mod.AllCapturePoints(),
+                    (currentArrayElement: any) => mod.Equals(
+                        mod.GetCurrentOwnerTeam(currentArrayElement),
+                        mod.GetTeam(2)))))) {
+                getTeamState(TEAM_2).score -=
+                    mod.Subtract(
+                        mod.CountOf(filterModArray(
+                            mod.AllCapturePoints(),
+                            (currentArrayElement: any) => mod.Equals(
+                                mod.GetCurrentOwnerTeam(currentArrayElement),
+                                mod.GetTeam(1)))),
+                        mod.CountOf(filterModArray(
+                            mod.AllCapturePoints(),
+                            (currentArrayElement: any) => mod.Equals(
+                                mod.GetCurrentOwnerTeam(currentArrayElement),
+                                mod.GetTeam(2)))));
+                uiController.updateScoreboard()
+                uiController.animateUIFlash("RightFlash1", "LeftFlash2")
+            }
+        } else {
+            getTeamState(TEAM_1).score -=
+                mod.CountOf(filterModArray(
+                    mod.AllCapturePoints(),
+                    (currentArrayElement: any) => mod.Equals(
+                        mod.GetCurrentOwnerTeam(currentArrayElement),
+                        mod.GetTeam(2))));
+            getTeamState(TEAM_2).score -=
+                mod.CountOf(filterModArray(
+                    mod.AllCapturePoints(),
+                    (currentArrayElement: any) => mod.Equals(
+                        mod.GetCurrentOwnerTeam(currentArrayElement),
+                        mod.GetTeam(1))));
+        }
+    }
+
+    playNearEndMusic(): void {
+        mod.PlayMusic(mod.MusicEvents.Core_Overtime_Loop)
+    }
+
+    initGameSettings(): void {
+        isGameOngoing = false;
+        getTeamState(TEAM_1).startingScore = 2000;
+        getTeamState(TEAM_2).startingScore = 1500;
+        if (mod.Not(FLAGS.CONQUEST_ASSAULT)) {
+            getTeamState(TEAM_1).startingScore = CONFIG.STARTING_SCORE;
+            getTeamState(TEAM_2).startingScore = CONFIG.STARTING_SCORE;
+        }
+        getTeamState(TEAM_1).score = getTeamState(TEAM_1).startingScore;
+        getTeamState(TEAM_2).score = getTeamState(TEAM_2).startingScore;
+        getTeamState(TEAM_1).otherTeam = mod.GetTeam(2);
+        getTeamState(TEAM_2).otherTeam = mod.GetTeam(1);
+        scorePositionLeft = mod.CreateVector(-315, 45, 0);
+        scorePositionRight = mod.CreateVector(315, 45, 0);
+        friendlyTextColour = mod.CreateVector(0, 0.8, 1);
+        friendlyBGColour = mod.CreateVector(0, 0.2, 0.5);
+        enemyTextColour = mod.CreateVector(1, 0.2, 0.2);
+        enemyBGColour = mod.CreateVector(0.6, 0.1, 0.1);
+        isFXResetting = false;
+    }
+
+    async setupMap(): Promise<void> {
+        mod.SetGameModeTimeLimit(CONFIG.TIME_LIMIT)
+        mod.SetGameModeTargetScore(1)
+        mod.SetVehicleCategoryAllowedInSurroundingArea(mod.VehicleCategories.Air_All, true)
+        if (mod.IsFaction(mod.GetTeam(1), mod.Factions.NATO)) {
+            getTeamState(TEAM_1).faction = "NATO";
+        } else {
+            getTeamState(TEAM_1).faction = "PAX";
+        }
+        if (mod.IsFaction(mod.GetTeam(2), mod.Factions.NATO)) {
+            getTeamState(TEAM_2).faction = "NATO";
+        } else {
+            getTeamState(TEAM_2).faction = "PAX";
+        }
+        uiController.setupMainUI()
+        uiController.updateScoreboard()
+        uiController.updateFlagIcons()
+        if (FLAGS.ENABLE_SNOW) {
+            snowVolume = mod.SpawnObject(mod.RuntimeSpawn_Common.EnvironmentDecalVolume_Winter_Event, mod.GetObjectPosition(mod.GetCapturePoint(200)), mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 10000));
+        }
+        uiController.setupColourFilter()
+        for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
+            capturePointController.setupCapturePoint(mod.ValueInArray(mod.AllCapturePoints(), i))
+        }
+        mod.SetUnspawnDelayInSeconds(mod.GetSpawner(901), 300)
+        mod.SetUnspawnDelayInSeconds(mod.GetSpawner(902), 300)
+        uiController.showVersion()
+        audio.vo1 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+        audio.vo2 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+        audio.vo3 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+        audio.vo4 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+        audio.vo5 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+        audio.vo6 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+        audio.tickSoundTaking = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickIcon_IsFriendly_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+        audio.tickSoundLosing = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickEnemy_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+        audio.capturedSound = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_OnCapturedByFriendly_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+        audio.oobSound = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_OutOfBounds_Countdown_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+        mod.PlayMusic(mod.MusicEvents.Core_LastPhaseBegin)
+        mod.LoadMusic(mod.MusicPackages.Core)
+        await mod.Wait(2)
+        isGameOngoing = true;
+        if (FLAGS.CONQUEST_ASSAULT) {
+            mod.EnableHQ(mod.GetHQ(2), false)
+        }
+        for (let i = 2000; i < 2999; i++) {
+            mod.EnableVFX(mod.GetVFX(i), true)
+        }
+        while (isGameOngoing) {
+            for (let i = 10; i < 0; i += -2) {
+                capturePointFlash = i / 10;
+                await mod.Wait(0.1)
+            }
+            for (let i = 0; i < 10; i += 2) {
+                capturePointFlash = i / 10;
+                await mod.Wait(0.1)
+            }
+        }
+    }
+
+    shouldPlayVOLowTime(): boolean {
+        return isGameOngoing && FLAGS.ENABLE_VO && mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 300);
+    }
+
+    playVOLowTime(): void {
+        mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.TimeLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
+        mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.TimeLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
+    }
+
+    shouldPlayVOWinning(): boolean {
+        return isGameOngoing && FLAGS.ENABLE_VO && mod.GreaterThan(
+            getTeamState(TEAM_1).score,
+            getTeamState(TEAM_2).score);
+    }
+
+    playVOWinning(): void {
+        mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.ProgressMidWinning, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
+        mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.ProgressMidLosing, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
+    }
+
+    shouldPlayVOTeam2Winning(): boolean {
+        return isGameOngoing && FLAGS.ENABLE_VO && mod.GreaterThan(
+            getTeamState(TEAM_2).score,
+            getTeamState(TEAM_1).score);
+    }
+
+    playVOTeam2Winning(): void {
+        mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.ProgressMidWinning, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
+        mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.ProgressMidLosing, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
+    }
+
+    shouldPlayVOLowTickets(): boolean {
+        return isGameOngoing && FLAGS.ENABLE_VO && mod.LessThanEqualTo(getTeamState(TEAM_1).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD);
+    }
+
+    playVOLowTickets(): void {
+        mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.PlayerCountFriendlyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
+        mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.PlayerCountEnemyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
+    }
+
+    shouldPlayVOTeam2LowTickets(): boolean {
+        return isGameOngoing && FLAGS.ENABLE_VO && mod.LessThanEqualTo(getTeamState(TEAM_2).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD);
+    }
+
+    playVOTeam2LowTickets(): void {
+        mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.PlayerCountFriendlyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
+        mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.PlayerCountEnemyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
+    }
+
+    checkConquestAssaultWin(): void {
+        if (FLAGS.CONQUEST_ASSAULT && mod.GreaterThan(
+            mod.GetMatchTimeElapsed(),
+            10) && mod.Equals(
+                mod.CountOf(filterModArray(
+                    mod.AllCapturePoints(),
+                    (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(2), mod.GetCurrentOwnerTeam(currentArrayElement)))),
+                0) && mod.Equals(
+                    mod.CountOf(filterModArray(
+                        mod.AllPlayers(),
+                        (currentArrayElement: any) => mod.NotEqualTo(mod.Equals(
+                            mod.GetTeam(2),
+                            mod.GetTeam(currentArrayElement)), mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive)))),
+                    0)) {
+            getTeamState(TEAM_2).score = 0;
+        }
+    }
+
+    async resetFX(eventInfo: PlayerEventInfo): Promise<void> {
+        while (isFXResetting) {
+            await mod.Wait(1)
+        }
+        isFXResetting = true;
+        for (let i = 2000; i < 2999; i++) {
+            mod.EnableVFX(mod.GetVFX(i), false)
+            mod.EnableVFX(mod.GetVFX(i), true)
+            if (mod.Equals(
+                mod.RoundToInteger(mod.Modulo(
+                    i,
+                    5)),
+                0)) {
+                await mod.Wait(0.066)
+            }
+        }
+        isFXResetting = false;
+    }
+
+    async endGame(): Promise<void> {
+        isGameOngoing = false;
+        mod.PauseGameModeTime(true)
+        if (mod.LessThan(
+            getTeamState(TEAM_1).score,
+            0)) {
+            getTeamState(TEAM_1).score = 0;
+        }
+        if (mod.LessThan(
+            getTeamState(TEAM_2).score,
+            0)) {
+            getTeamState(TEAM_2).score = 0;
+        }
+        if (mod.GreaterThan(
+            getTeamState(TEAM_1).score,
+            getTeamState(TEAM_2).score)) {
+            mod.SetMusicParam(mod.MusicParams.Core_IsWinning, 1, mod.GetTeam(1))
+        } else if (mod.GreaterThan(
+            getTeamState(TEAM_2).score,
+            getTeamState(TEAM_1).score)) {
+            mod.SetMusicParam(mod.MusicParams.Core_IsWinning, 1, mod.GetTeam(2))
+        } else {
+        }
+        mod.PlayMusic(mod.MusicEvents.Core_EndOfRound_Loop)
+        scorePositionLeft = mod.CreateVector(-300, 385, 0);
+        scorePositionRight = mod.CreateVector(300, 385, 0);
+        uiController.updateScoreboard()
+        uiController.teardownScoreUI()
+        uiController.showEndGameUI("Team1ScoreLeft", scorePositionLeft)
+        uiController.showEndGameUI("Team1ScoreRight", scorePositionRight)
+        uiController.showEndGameUI("Team2ScoreLeft", scorePositionLeft)
+        uiController.showEndGameUI("Team2ScoreRight", scorePositionRight)
+        await mod.Wait(4)
+        if (mod.GreaterThan(
+            getTeamState(TEAM_1).score,
+            getTeamState(TEAM_2).score)) {
+            mod.EndGameMode(mod.GetTeam(1))
+        } else if (mod.GreaterThan(
+            getTeamState(TEAM_2).score,
+            getTeamState(TEAM_1).score)) {
+            mod.EndGameMode(mod.GetTeam(2))
+        } else {
+            mod.EndGameMode(mod.GetTeam(0))
+        }
+    }
+}
 
 const uiController = new UIController();
 const playerController = new PlayerController();
@@ -1673,276 +2022,46 @@ const conquestGame = new ConquestGame();
 
 // ============================================================
 
-function initGameSettings() {
-    isGameOngoing = false;
-    // FLAGS.ENABLE_CUSTOM_AI is a constant
-    // CONFIG.MAX_CUSTOM_AI is a constant
-    // FLAGS.ENABLE_TEAM_SWITCHING is a constant
-    // CONFIG.TIME_LIMIT is a constant
-    // CONFIG.STARTING_SCORE is a constant
-    // CONFIG.LOW_TICKET_MUSIC_THRESHOLD is a constant
-    // FLAGS.LOSER_ONLY_TICKET_BLEED is a constant
-    // FLAGS.TOTAL_CONTROL_TICKET_BLEED is a constant
-    // CONFIG.TOTAL_CONTROL_BONUS is a constant
-    // CONFIG.TICKET_BLEED_SPEED is a constant
-    // FLAGS.PLAYER_DEATHS_BLEED is a constant
-    // CONFIG.FLAG_CAPTURE_TIME is a constant
-    // CONFIG.FLAG_NEUTRAL_TIME is a constant
-    // FLAGS.ENABLE_VO is a constant
-    // FLAGS.ENABLE_SNOW is a constant
-    // FLAGS.SNOW_COLOUR_FILTER is a constant
-    // FLAGS.BF3_COLOUR_FILTER is a constant
-    // FLAGS.BF4_COLOUR_FILTER is a constant
-    // FLAGS.GIVE_PLAYERS_NVG is a constant
-    // FLAGS.CONQUEST_ASSAULT is a constant
-    getTeamState(TEAM_1).startingScore = 2000;
-    getTeamState(TEAM_2).startingScore = 1500;
-    if (mod.Not(FLAGS.CONQUEST_ASSAULT)) {
-        getTeamState(TEAM_1).startingScore = CONFIG.STARTING_SCORE;
-        getTeamState(TEAM_2).startingScore = CONFIG.STARTING_SCORE;
-    }
-    getTeamState(TEAM_1).score = getTeamState(TEAM_1).startingScore;
-    getTeamState(TEAM_2).score = getTeamState(TEAM_2).startingScore;
-    getTeamState(TEAM_1).otherTeam = mod.GetTeam(2);
-    getTeamState(TEAM_2).otherTeam = mod.GetTeam(1);
-    scorePositionLeft = mod.CreateVector(-315, 45, 0);
-    scorePositionRight = mod.CreateVector(315, 45, 0);
-    friendlyTextColour = mod.CreateVector(0, 0.8, 1);
-    friendlyBGColour = mod.CreateVector(0, 0.2, 0.5);
-    enemyTextColour = mod.CreateVector(1, 0.2, 0.2);
-    enemyBGColour = mod.CreateVector(0.6, 0.1, 0.1);
-    isFXResetting = false;
-    // CapturePointProgress is now in CapturePointState
-    // PlayersOnPoint is now a Map, initialized in TeamState constructor
-    // PlayersOnPoint is now a Map, initialized in TeamState constructor
-    // Cap_TextColour is now a Map, initialized in TeamState constructor
-    // Cap_TextColour is now a Map, initialized in TeamState constructor
-    // Cap_BGColour is now a Map, initialized in TeamState constructor
-    // Cap_BGColour is now a Map, initialized in TeamState constructor
-    // Cap_Message is now a Map, initialized in TeamState constructor
-    // Cap_Message is now a Map, initialized in TeamState constructor
-    // Cap_Progress is now a Map, initialized in TeamState constructor
-    // Cap_Progress is now a Map, initialized in TeamState constructor
-    // CaptureProgressSize is now in CapturePointState
-    // CaptureProgressPosition is now in CapturePointState
-}
 function initGameSettingsRule(conditionState: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    initGameSettings();
+    conquestGame.initGameSettings();
 }
 
-async function setupMap() {
-    mod.SetGameModeTimeLimit(CONFIG.TIME_LIMIT)
-    mod.SetGameModeTargetScore(1)
-    mod.SetVehicleCategoryAllowedInSurroundingArea(mod.VehicleCategories.Air_All, true)
-    if (mod.IsFaction(mod.GetTeam(1), mod.Factions.NATO)) {
-        getTeamState(TEAM_1).faction = "NATO";
-    } else {
-        getTeamState(TEAM_1).faction = "PAX";
-    }
-    if (mod.IsFaction(mod.GetTeam(2), mod.Factions.NATO)) {
-        getTeamState(TEAM_2).faction = "NATO";
-    } else {
-        getTeamState(TEAM_2).faction = "PAX";
-    }
-    uiController.setupMainUI()
-    uiController.updateScoreboard()
-    uiController.updateFlagIcons()
-    if (FLAGS.ENABLE_SNOW) {
-        snowVolume = mod.SpawnObject(mod.RuntimeSpawn_Common.EnvironmentDecalVolume_Winter_Event, mod.GetObjectPosition(mod.GetCapturePoint(200)), mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 10000));
-    }
-    uiController.setupColourFilter()
-    for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
-        capturePointController.setupCapturePoint(mod.ValueInArray(mod.AllCapturePoints(), i))
-    }
-    mod.SetUnspawnDelayInSeconds(mod.GetSpawner(901), 300)
-    mod.SetUnspawnDelayInSeconds(mod.GetSpawner(902), 300)
-    uiController.showVersion()
-    audio.vo1 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-    audio.vo2 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-    audio.vo3 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-    audio.vo4 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-    audio.vo5 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-    audio.vo6 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-    audio.tickSoundTaking = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickIcon_IsFriendly_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-    audio.tickSoundLosing = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickEnemy_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-    audio.capturedSound = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_OnCapturedByFriendly_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-    audio.oobSound = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_OutOfBounds_Countdown_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-    mod.PlayMusic(mod.MusicEvents.Core_LastPhaseBegin)
-    mod.LoadMusic(mod.MusicPackages.Core)
-    await mod.Wait(2)
-    isGameOngoing = true;
-    if (FLAGS.CONQUEST_ASSAULT) {
-        mod.EnableHQ(mod.GetHQ(2), false)
-    }
-    for (let i = 2000; i < 2999; i++) {
-        mod.EnableVFX(mod.GetVFX(i), true)
-    }
-    while (isGameOngoing) {
-        for (let i = 10; i < 0; i += -2) {
-            capturePointFlash = i / 10;
-            await mod.Wait(0.1)
-        }
-        for (let i = 0; i < 10; i += 2) {
-            capturePointFlash = i / 10;
-            await mod.Wait(0.1)
-        }
-    }
-}
 function setupMapRule(conditionState: any) {
     let newState = true;
     if (!conditionState.update(newState)) {
         return;
     }
-    setupMap();
+    conquestGame.setupMap();
 }
 
-function shouldUpdateScoreTime(): boolean {
-    const newState = mod.And(isGameOngoing, mod.Equals(
-        mod.Modulo(
-            mod.RoundToInteger(mod.GetMatchTimeElapsed()),
-            2),
-        0))
-    return newState;
-}
 
-async function updateScoreTimeAndAI() {
-    uiController.updateScoreboard()
-    aiController.addAI()
-    await mod.Wait(0.1)
-    aiController.addAI()
-    checkConquestAssaultWin()
-}
+
 function updateScoreTimeRule(conditionState: any) {
-    let newState = shouldUpdateScoreTime();
+    let newState = conquestGame.shouldUpdateScoreTime();
     if (!conditionState.update(newState)) {
         return;
     }
-    updateScoreTimeAndAI();
+    conquestGame.updateScoreTimeAndAI();
 }
 
-function shouldUpdateScoreTimeOddTick(): boolean {
-    const newState = mod.And(isGameOngoing, mod.Equals(
-        mod.Modulo(
-            mod.RoundToInteger(mod.GetMatchTimeElapsed()),
-            2),
-        1))
-    return newState;
-}
-
-async function updateScoreTimeAndAISecondaryTick() {
-    uiController.updateScoreboard()
-    aiController.addAI()
-    await mod.Wait(0.1)
-    aiController.addAI()
-}
 function updateScoreTimeSecondaryTickRule(conditionState: any) {
-    let newState = shouldUpdateScoreTimeOddTick();
+    let newState = conquestGame.shouldUpdateScoreTimeOddTick();
     if (!conditionState.update(newState)) {
         return;
     }
-    updateScoreTimeAndAISecondaryTick();
+    conquestGame.updateScoreTimeAndAISecondaryTick();
 }
 
-function shouldTrackScore(): boolean {
-    const newState = mod.And(isGameOngoing, mod.Equals(
-        mod.Modulo(
-            mod.RoundToInteger(mod.GetMatchTimeElapsed()),
-            CONFIG.TICKET_BLEED_SPEED),
-        0))
-    return newState;
-}
-
-function trackScoreAndBleed() {
-    if (FLAGS.TOTAL_CONTROL_TICKET_BLEED) {
-        if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
-            mod.GetCurrentOwnerTeam(currentArrayElement),
-            mod.GetTeam(1)))) {
-            getTeamState(TEAM_2).score -= CONFIG.TOTAL_CONTROL_BONUS;
-        } else if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
-            mod.GetCurrentOwnerTeam(currentArrayElement),
-            mod.GetTeam(2)))) {
-            getTeamState(TEAM_1).score -= CONFIG.TOTAL_CONTROL_BONUS;
-        } else {
-        }
-    }
-    if (FLAGS.LOSER_ONLY_TICKET_BLEED) {
-        if (mod.GreaterThan(
-            mod.CountOf(filterModArray(
-                mod.AllCapturePoints(),
-                (currentArrayElement: any) => mod.Equals(
-                    mod.GetCurrentOwnerTeam(currentArrayElement),
-                    mod.GetTeam(2)))),
-            mod.CountOf(filterModArray(
-                mod.AllCapturePoints(),
-                (currentArrayElement: any) => mod.Equals(
-                    mod.GetCurrentOwnerTeam(currentArrayElement),
-                    mod.GetTeam(1)))))) {
-            getTeamState(TEAM_1).score -=
-                mod.Subtract(
-                    mod.CountOf(filterModArray(
-                        mod.AllCapturePoints(),
-                        (currentArrayElement: any) => mod.Equals(
-                            mod.GetCurrentOwnerTeam(currentArrayElement),
-                            mod.GetTeam(2)))),
-                    mod.CountOf(filterModArray(
-                        mod.AllCapturePoints(),
-                        (currentArrayElement: any) => mod.Equals(
-                            mod.GetCurrentOwnerTeam(currentArrayElement),
-                            mod.GetTeam(1)))));
-            uiController.updateScoreboard()
-            uiController.animateUIFlash("LeftFlash1", "RightFlash2")
-        }
-        if (mod.GreaterThan(
-            mod.CountOf(filterModArray(
-                mod.AllCapturePoints(),
-                (currentArrayElement: any) => mod.Equals(
-                    mod.GetCurrentOwnerTeam(currentArrayElement),
-                    mod.GetTeam(1)))),
-            mod.CountOf(filterModArray(
-                mod.AllCapturePoints(),
-                (currentArrayElement: any) => mod.Equals(
-                    mod.GetCurrentOwnerTeam(currentArrayElement),
-                    mod.GetTeam(2)))))) {
-            getTeamState(TEAM_2).score -=
-                mod.Subtract(
-                    mod.CountOf(filterModArray(
-                        mod.AllCapturePoints(),
-                        (currentArrayElement: any) => mod.Equals(
-                            mod.GetCurrentOwnerTeam(currentArrayElement),
-                            mod.GetTeam(1)))),
-                    mod.CountOf(filterModArray(
-                        mod.AllCapturePoints(),
-                        (currentArrayElement: any) => mod.Equals(
-                            mod.GetCurrentOwnerTeam(currentArrayElement),
-                            mod.GetTeam(2)))));
-            uiController.updateScoreboard()
-            uiController.animateUIFlash("RightFlash1", "LeftFlash2")
-        }
-    } else {
-        getTeamState(TEAM_1).score -=
-            mod.CountOf(filterModArray(
-                mod.AllCapturePoints(),
-                (currentArrayElement: any) => mod.Equals(
-                    mod.GetCurrentOwnerTeam(currentArrayElement),
-                    mod.GetTeam(2))));
-        getTeamState(TEAM_2).score -=
-            mod.CountOf(filterModArray(
-                mod.AllCapturePoints(),
-                (currentArrayElement: any) => mod.Equals(
-                    mod.GetCurrentOwnerTeam(currentArrayElement),
-                    mod.GetTeam(1))));
-    }
-}
 function trackScoreRule(conditionState: any) {
-    let newState = shouldTrackScore();
+    let newState = conquestGame.shouldTrackScore();
     if (!conditionState.update(newState)) {
         return;
     }
-    trackScoreAndBleed();
+    conquestGame.trackScoreAndBleed();
 }
 
 function processKillRule(conditionState: any, eventInfo: any) {
@@ -2018,86 +2137,20 @@ async function notifyCaptureRule(conditionState: any, eventInfo: any) {
     await capturePointController.onCapturing(eventInfo);
 }
 
-function shouldPlayNearEndMusic(): boolean {
-    const newState = mod.And(isGameOngoing, mod.Or(
-        mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 60),
-        mod.Or(
-            mod.LessThanEqualTo(getTeamState(TEAM_1).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD),
-            mod.LessThanEqualTo(getTeamState(TEAM_2).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD))))
-    return newState;
-}
-
-function playNearEndMusic() {
-    mod.PlayMusic(mod.MusicEvents.Core_Overtime_Loop)
-}
 function playNearEndMusicRule(conditionState: any) {
-    let newState = shouldPlayNearEndMusic();
+    let newState = conquestGame.shouldPlayNearEndMusic();
     if (!conditionState.update(newState)) {
         return;
     }
-    playNearEndMusic();
+    conquestGame.playNearEndMusic();
 }
 
-function shouldEndGame(): boolean {
-    const newState = mod.And(isGameOngoing, mod.Or(
-        mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 1),
-        mod.Or(
-            mod.LessThanEqualTo(getTeamState(TEAM_1).score, 0),
-            mod.LessThanEqualTo(getTeamState(TEAM_2).score, 0))))
-    return newState;
-}
-
-async function endGame() {
-    isGameOngoing = false;
-    mod.PauseGameModeTime(true)
-    if (mod.LessThan(
-        getTeamState(TEAM_1).score,
-        0)) {
-        getTeamState(TEAM_1).score = 0;
-    }
-    if (mod.LessThan(
-        getTeamState(TEAM_2).score,
-        0)) {
-        getTeamState(TEAM_2).score = 0;
-    }
-    if (mod.GreaterThan(
-        getTeamState(TEAM_1).score,
-        getTeamState(TEAM_2).score)) {
-        mod.SetMusicParam(mod.MusicParams.Core_IsWinning, 1, mod.GetTeam(1))
-    } else if (mod.GreaterThan(
-        getTeamState(TEAM_2).score,
-        getTeamState(TEAM_1).score)) {
-        mod.SetMusicParam(mod.MusicParams.Core_IsWinning, 1, mod.GetTeam(2))
-    } else {
-    }
-    mod.PlayMusic(mod.MusicEvents.Core_EndOfRound_Loop)
-    scorePositionLeft = mod.CreateVector(-300, 385, 0);
-    scorePositionRight = mod.CreateVector(300, 385, 0);
-    uiController.updateScoreboard()
-    uiController.teardownScoreUI()
-    uiController.showEndGameUI("Team1ScoreLeft", scorePositionLeft)
-    uiController.showEndGameUI("Team1ScoreRight", scorePositionRight)
-    uiController.showEndGameUI("Team2ScoreLeft", scorePositionLeft)
-    uiController.showEndGameUI("Team2ScoreRight", scorePositionRight)
-    await mod.Wait(4)
-    if (mod.GreaterThan(
-        getTeamState(TEAM_1).score,
-        getTeamState(TEAM_2).score)) {
-        mod.EndGameMode(mod.GetTeam(1))
-    } else if (mod.GreaterThan(
-        getTeamState(TEAM_2).score,
-        getTeamState(TEAM_1).score)) {
-        mod.EndGameMode(mod.GetTeam(2))
-    } else {
-        mod.EndGameMode(mod.GetTeam(0))
-    }
-}
 function endGameRule(conditionState: any) {
-    let newState = shouldEndGame();
+    let newState = conquestGame.shouldEndGame();
     if (!conditionState.update(newState)) {
         return;
     }
-    endGame();
+    conquestGame.endGame();
 }
 
 function shouldShowCaptureUI(eventInfo: any): boolean {
@@ -2254,93 +2307,44 @@ function exitAreaTriggerRule(conditionState: any, eventInfo: any) {
     playerController.exitAreaTrigger(eventInfo);
 }
 
-function shouldPlayVOLowTime(): boolean {
-    const newState = isGameOngoing && FLAGS.ENABLE_VO && mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 300);
-    return newState;
-}
-
-function playVOLowTime() {
-    mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.TimeLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
-    mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.TimeLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
-}
 function playVOLowTimeRule(conditionState: any) {
-    let newState = shouldPlayVOLowTime();
+    let newState = conquestGame.shouldPlayVOLowTime();
     if (!conditionState.update(newState)) {
         return;
     }
-    playVOLowTime();
+    conquestGame.playVOLowTime();
 }
 
-function shouldPlayVOWinning(): boolean {
-    const newState = isGameOngoing && FLAGS.ENABLE_VO && mod.GreaterThan(
-        getTeamState(TEAM_1).score,
-        getTeamState(TEAM_2).score);
-    return newState;
-}
-
-function playVOWinning() {
-    mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.ProgressMidWinning, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
-    mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.ProgressMidLosing, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
-}
 function playVOWinningRule(conditionState: any) {
-    let newState = shouldPlayVOWinning();
+    let newState = conquestGame.shouldPlayVOWinning();
     if (!conditionState.update(newState)) {
         return;
     }
-    playVOWinning();
+    conquestGame.playVOWinning();
 }
 
-function shouldPlayVOTeam2Winning(): boolean {
-    const newState = isGameOngoing && FLAGS.ENABLE_VO && mod.GreaterThan(
-        getTeamState(TEAM_2).score,
-        getTeamState(TEAM_1).score);
-    return newState;
-}
-
-function playVOTeam2Winning() {
-    mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.ProgressMidWinning, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
-    mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.ProgressMidLosing, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
-}
 function playVOTeam2WinningRule(conditionState: any) {
-    let newState = shouldPlayVOTeam2Winning();
+    let newState = conquestGame.shouldPlayVOTeam2Winning();
     if (!conditionState.update(newState)) {
         return;
     }
-    playVOTeam2Winning();
+    conquestGame.playVOTeam2Winning();
 }
 
-function shouldPlayVOLowTickets(): boolean {
-    const newState = isGameOngoing && FLAGS.ENABLE_VO && mod.LessThanEqualTo(getTeamState(TEAM_1).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD);
-    return newState;
-}
-
-function playVOLowTickets() {
-    mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.PlayerCountFriendlyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
-    mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.PlayerCountEnemyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
-}
 function playVOLowTicketsRule(conditionState: any) {
-    let newState = shouldPlayVOLowTickets();
+    let newState = conquestGame.shouldPlayVOLowTickets();
     if (!conditionState.update(newState)) {
         return;
     }
-    playVOLowTickets();
+    conquestGame.playVOLowTickets();
 }
 
-function shouldPlayVOTeam2LowTickets(): boolean {
-    const newState = isGameOngoing && FLAGS.ENABLE_VO && mod.LessThanEqualTo(getTeamState(TEAM_2).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD);
-    return newState;
-}
-
-function playVOTeam2LowTickets() {
-    mod.PlayVO(audio.vo5!, mod.VoiceOverEvents2D.PlayerCountFriendlyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(2))
-    mod.PlayVO(audio.vo6!, mod.VoiceOverEvents2D.PlayerCountEnemyLow, mod.VoiceOverFlags.Alpha, mod.GetTeam(1))
-}
 function playVOTeam2LowTicketsRule(conditionState: any) {
-    let newState = shouldPlayVOTeam2LowTickets();
+    let newState = conquestGame.shouldPlayVOTeam2LowTickets();
     if (!conditionState.update(newState)) {
         return;
     }
-    playVOTeam2LowTickets();
+    conquestGame.playVOTeam2LowTickets();
 }
 
 function runCaptureProgressRule(conditionState: any, eventInfo: any) {
@@ -2538,46 +2542,7 @@ function initFlagCalls() {
 
 
 
-async function resetFX(eventInfo: any) {
 
-
-    while (isFXResetting) {
-        await mod.Wait(1)
-    }
-    isFXResetting = true;
-    for (let i = 2000; i < 2999; i++) {
-        mod.EnableVFX(mod.GetVFX(i), false)
-        mod.EnableVFX(mod.GetVFX(i), true)
-        if (mod.Equals(
-            mod.RoundToInteger(mod.Modulo(
-                i,
-                5)),
-            0)) {
-            await mod.Wait(0.066)
-        }
-    }
-    isFXResetting = false;
-}
-
-function checkConquestAssaultWin() {
-
-    const newState = FLAGS.CONQUEST_ASSAULT && mod.GreaterThan(
-        mod.GetMatchTimeElapsed(),
-        10) && mod.Equals(
-            mod.CountOf(filterModArray(
-                mod.AllCapturePoints(),
-                (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(2), mod.GetCurrentOwnerTeam(currentArrayElement)))),
-            0) && mod.Equals(
-                mod.CountOf(filterModArray(
-                    mod.AllPlayers(),
-                    (currentArrayElement: any) => mod.NotEqualTo(mod.Equals(
-                        mod.GetTeam(2),
-                        mod.GetTeam(currentArrayElement)), mod.GetSoldierState(currentArrayElement, mod.SoldierStateBool.IsAlive)))),
-                0);
-    return newState;
-
-    getTeamState(TEAM_2).score = 0;
-}
 
 // UI ID: PlayerRoot_<playerObjectId>
 
