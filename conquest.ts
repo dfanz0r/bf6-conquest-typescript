@@ -1633,9 +1633,7 @@ class AIController {
         if (mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))) {
             await mod.Wait(1.5)
             if (mod.IsType(getPlayerState(eventInfo.eventPlayer).aiTarget, mod.Types.CapturePoint)) {
-                if (mod.Equals(
-                    eventInfo.eventCapturePoint,
-                    getPlayerState(eventInfo.eventPlayer).aiTarget)) {
+                if (mod.Equals(eventInfo.eventCapturePoint, getPlayerState(eventInfo.eventPlayer).aiTarget)) {
                     if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive)) {
                         mod.AIDefendPositionBehavior(eventInfo.eventPlayer, mod.GetObjectPosition(getPlayerState(eventInfo.eventPlayer).aiTarget!), 0, 20)
                     }
@@ -1651,22 +1649,30 @@ class AIController {
     }
 
     async readyForAttack(eventInfo: PlayerEventInfo): Promise<void> {
+        const player = eventInfo.eventPlayer;
+        const playerState = getPlayerState(player);
+        const enemyTeam = getTeamState(playerState.team).otherTeam;
+
+        const canEngageNearbyEnemy = () =>
+            mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive) && !mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle);
+
+        const attackNearbyEnemy = (enemy: mod.Player) => {
+            mod.AIDefendPositionBehavior(player, mod.GetObjectPosition(enemy), 10, 25)
+            mod.AISetTarget(player, enemy)
+            mod.AISetMoveSpeed(player, mod.MoveSpeed.InvestigateRun)
+        };
+
         await mod.Wait(mod.RandomReal(2, 3))
-        while (mod.IsPlayerValid(eventInfo.eventPlayer)) {
-            if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive)) {
-                if (mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle))) {
-                    if (mod.LessThan(
-                        mod.DistanceBetween(
-                            mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(eventInfo.eventPlayer), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam)),
-                            mod.GetObjectPosition(eventInfo.eventPlayer)),
-                        25)) {
-                        mod.AIDefendPositionBehavior(eventInfo.eventPlayer, mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(eventInfo.eventPlayer), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam)), 10, 25)
-                        mod.AISetTarget(eventInfo.eventPlayer, mod.ClosestPlayerTo(mod.GetObjectPosition(eventInfo.eventPlayer), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam))
-                        mod.AISetMoveSpeed(eventInfo.eventPlayer, mod.MoveSpeed.InvestigateRun)
-                        await mod.Wait(15)
-                        if (mod.Not(getPlayerState(eventInfo.eventPlayer).aiInAction)) {
-                            this.startScouting(eventInfo.eventPlayer)
-                        }
+        while (mod.IsPlayerValid(player)) {
+            if (canEngageNearbyEnemy()) {
+                const playerPosition = mod.GetObjectPosition(player);
+                const closestEnemy = mod.ClosestPlayerTo(playerPosition, enemyTeam);
+                const enemyPosition = mod.GetObjectPosition(closestEnemy);
+                if (mod.DistanceBetween(enemyPosition, playerPosition) < 25) {
+                    attackNearbyEnemy(closestEnemy);
+                    await mod.Wait(15)
+                    if (!playerState.aiInAction) {
+                        this.startScouting(player)
                     }
                 }
             }
@@ -1713,146 +1719,132 @@ class AIController {
     }
 
     spawnAIObjectives(eventInfo: PlayerEventInfo): void {
-        if (mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle))) {
-            getPlayerState(eventInfo.eventPlayer).aiSpawnPoints = mod.EmptyArray();
-            getPlayerState(eventInfo.eventPlayer).aiSpawnPoints = filterModArray(
+        const player = eventInfo.eventPlayer;
+        const playerState = getPlayerState(player);
+        const playerTeam = playerState.team;
+        const enemyTeam = getTeamState(playerTeam).otherTeam;
+        const isConquestAssaultAttacker = FLAGS.CONQUEST_ASSAULT && mod.Equals(mod.GetTeam(2), playerTeam);
+
+        const openVehicles = () => filterModArray(
+            mod.AllVehicles(),
+            (vehicle: any) => mod.CountOf(mod.GetAllPlayersInVehicle(vehicle)) < 2);
+
+        const teleportToSpawnObjectiveAndTryVehicle = () => {
+            mod.Teleport(player, mod.GetObjectPosition(mod.RandomValueInArray(playerState.aiSpawnPoints)), 1)
+            this.deployAIVehicle(mod.RandomValueInArray(openVehicles()), 60, eventInfo)
+        };
+
+        if (!mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle)) {
+            playerState.aiSpawnPoints = filterModArray(
                 mod.AllCapturePoints(),
-                (currentArrayElement: any) => mod.And(
-                    mod.Equals(
-                        mod.GetTeam(eventInfo.eventPlayer),
-                        mod.GetCurrentOwnerTeam(currentArrayElement)),
-                    mod.GreaterThan(
-                        mod.DistanceBetween(
-                            mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(currentArrayElement), getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam)),
-                            mod.GetObjectPosition(currentArrayElement)),
-                        40)))
-            if (mod.GreaterThan(
-                mod.CountOf(getPlayerState(eventInfo.eventPlayer).aiSpawnPoints),
-                0)) {
-                if (mod.And(
-                    FLAGS.CONQUEST_ASSAULT,
-                    mod.Equals(
-                        mod.GetTeam(2),
-                        mod.GetTeam(eventInfo.eventPlayer)))) {
-                    mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.RandomValueInArray(getPlayerState(eventInfo.eventPlayer).aiSpawnPoints)), 1)
-                    this.deployAIVehicle(mod.RandomValueInArray(filterModArray(
-                        mod.AllVehicles(),
-                        (currentArrayElement: any) => mod.LessThan(
-                            mod.CountOf(mod.GetAllPlayersInVehicle(currentArrayElement)),
-                            2))), 60, eventInfo)
+                (capturePoint: any) => {
+                    const capturePointPosition = mod.GetObjectPosition(capturePoint);
+                    const closestEnemy = mod.ClosestPlayerTo(capturePointPosition, enemyTeam);
+                    return mod.Equals(playerTeam, mod.GetCurrentOwnerTeam(capturePoint)) &&
+                        mod.DistanceBetween(mod.GetObjectPosition(closestEnemy), capturePointPosition) > 40;
+                })
+
+            if (mod.CountOf(playerState.aiSpawnPoints) > 0) {
+                if (isConquestAssaultAttacker) {
+                    teleportToSpawnObjectiveAndTryVehicle();
                 }
-                if (mod.LessThan(
-                    mod.RoundToInteger(mod.RandomReal(0, 5)),
-                    5)) {
-                    mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.RandomValueInArray(getPlayerState(eventInfo.eventPlayer).aiSpawnPoints)), 1)
-                    this.deployAIVehicle(mod.RandomValueInArray(filterModArray(
-                        mod.AllVehicles(),
-                        (currentArrayElement: any) => mod.LessThan(
-                            mod.CountOf(mod.GetAllPlayersInVehicle(currentArrayElement)),
-                            2))), 60, eventInfo)
+                if (mod.RoundToInteger(mod.RandomReal(0, 5)) < 5) {
+                    teleportToSpawnObjectiveAndTryVehicle();
                 }
-            } else {
-                if (mod.And(
-                    FLAGS.CONQUEST_ASSAULT,
-                    mod.Equals(
-                        mod.GetTeam(2),
-                        mod.GetTeam(eventInfo.eventPlayer)))) {
-                    mod.UndeployPlayer(eventInfo.eventPlayer)
-                }
+            } else if (isConquestAssaultAttacker) {
+                mod.UndeployPlayer(player)
             }
         }
     }
 
     deployAIVehicle(vehicle: mod.Vehicle, distance: number, eventInfo: PlayerEventInfo): void {
-        if (mod.IsPlayerValid(eventInfo.eventPlayer) && mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsInVehicle))) {
-            if (mod.LessThan(
-                mod.DistanceBetween(
-                    mod.GetVehicleState(vehicle, mod.VehicleStateVector.VehiclePosition),
-                    mod.GetObjectPosition(eventInfo.eventPlayer)),
-                distance)) {
-                mod.AIBattlefieldBehavior(eventInfo.eventPlayer)
-                mod.ForcePlayerToSeat(eventInfo.eventPlayer, vehicle, -1)
+        const player = eventInfo.eventPlayer;
+
+        if (mod.IsPlayerValid(player) && !mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle)) {
+            const vehiclePosition = mod.GetVehicleState(vehicle, mod.VehicleStateVector.VehiclePosition);
+            const playerPosition = mod.GetObjectPosition(player);
+            if (mod.DistanceBetween(vehiclePosition, playerPosition) < distance) {
+                mod.AIBattlefieldBehavior(player)
+                mod.ForcePlayerToSeat(player, vehicle, -1)
             }
         }
     }
 
     async deploy(eventInfo: PlayerEventInfo): Promise<void> {
+        const player = eventInfo.eventPlayer;
+
         this.spawnAIObjectives(eventInfo)
         await mod.Wait(0.2)
-        if (mod.Equals(
-            mod.RoundToInteger(mod.RandomReal(0, 1)),
-            0)) {
-            this.deployAIVehicle(mod.RandomValueInArray(filterModArray(
+
+        if (mod.RoundToInteger(mod.RandomReal(0, 1)) === 0) {
+            const playerPosition = mod.GetObjectPosition(player);
+            const nearbyOpenVehicles = filterModArray(
                 mod.AllVehicles(),
-                (currentArrayElement: any) => mod.And(
-                    mod.LessThan(
-                        mod.CountOf(mod.GetAllPlayersInVehicle(currentArrayElement)),
-                        2),
-                    mod.LessThan(
-                        mod.DistanceBetween(
-                            mod.GetVehicleState(currentArrayElement, mod.VehicleStateVector.VehiclePosition),
-                            mod.GetObjectPosition(eventInfo.eventPlayer)),
-                        150)))), 150, eventInfo)
+                (vehicle: any) => mod.CountOf(mod.GetAllPlayersInVehicle(vehicle)) < 2 &&
+                    mod.DistanceBetween(
+                        mod.GetVehicleState(vehicle, mod.VehicleStateVector.VehiclePosition),
+                        playerPosition) < 150);
+            this.deployAIVehicle(mod.RandomValueInArray(nearbyOpenVehicles), 150, eventInfo)
         }
+
         await mod.Wait(0.2)
-        this.startScouting(eventInfo.eventPlayer)
+        this.startScouting(player)
     }
 
     addAI(): void {
-        if (FLAGS.ENABLE_CUSTOM_AI) {
-            if (mod.LessThan(
-                mod.CountOf(mod.AllPlayers()),
-                CONFIG.MAX_CUSTOM_AI)) {
-                const botNameCount = botNames.length;
-                if (botNameCount <= 0) return;
-                if (mod.GreaterThan(
-                    mod.CountOf(filterModArray(
-                        mod.AllPlayers(),
-                        (currentArrayElement: any) => mod.Equals(
-                            mod.GetTeam(currentArrayElement),
-                            mod.GetTeam(1)))),
-                    mod.CountOf(filterModArray(
-                        mod.AllPlayers(),
-                        (currentArrayElement: any) => mod.Equals(
-                            mod.GetTeam(currentArrayElement),
-                            mod.GetTeam(2)))))) {
-                    mod.SpawnAIFromAISpawner(mod.GetSpawner(902), mod.Message(botNames[botNameIndex]), mod.GetTeam(2))
-                } else {
-                    mod.SpawnAIFromAISpawner(mod.GetSpawner(901), mod.Message(botNames[botNameIndex]), mod.GetTeam(1))
-                }
-                botNameIndex = (botNameIndex + 1) % botNameCount;
-            }
+        if (!FLAGS.ENABLE_CUSTOM_AI || mod.CountOf(mod.AllPlayers()) >= CONFIG.MAX_CUSTOM_AI) return;
+
+        const botNameCount = botNames.length;
+        if (botNameCount <= 0) return;
+
+        const players = mod.AllPlayers();
+        const team1 = mod.GetTeam(1);
+        const team2 = mod.GetTeam(2);
+        const team1PlayerCount = mod.CountOf(filterModArray(
+            players,
+            (player: any) => mod.Equals(mod.GetTeam(player), team1)));
+        const team2PlayerCount = mod.CountOf(filterModArray(
+            players,
+            (player: any) => mod.Equals(mod.GetTeam(player), team2)));
+
+        if (team1PlayerCount > team2PlayerCount) {
+            mod.SpawnAIFromAISpawner(mod.GetSpawner(902), mod.Message(botNames[botNameIndex]), team2)
+        } else {
+            mod.SpawnAIFromAISpawner(mod.GetSpawner(901), mod.Message(botNames[botNameIndex]), team1)
         }
+        botNameIndex = (botNameIndex + 1) % botNameCount;
     }
 
     startScouting(player: mod.Player): void {
-        if (mod.IsPlayerValid(player) && mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive) && !mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle)) {
-            if (mod.Equals(
-                mod.CountOf(filterModArray(
-                    mod.AllCapturePoints(),
-                    (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(player), mod.GetCurrentOwnerTeam(currentArrayElement)))),
-                0)) {
-                getPlayerState(player).aiTarget = mod.RandomValueInArray(filterModArray(
-                    mod.AllCapturePoints(),
-                    (currentArrayElement: any) => mod.Equals(
-                        mod.GetTeam(player),
-                        mod.GetCurrentOwnerTeam(currentArrayElement))));
-                mod.AIDefendPositionBehavior(player, mod.GetObjectPosition(getPlayerState(player).aiTarget!), 0, 30)
-            } else {
-                getPlayerState(player).aiTarget = mod.RandomValueInArray(filterModArray(
-                    mod.AllCapturePoints(),
-                    (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(player), mod.GetCurrentOwnerTeam(currentArrayElement))));
-                mod.AIMoveToBehavior(player, mod.GetObjectPosition(getPlayerState(player).aiTarget!))
-            }
-            if (mod.GreaterThan(
-                mod.DistanceBetween(
-                    mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(player), getTeamState(mod.GetTeam(player)).otherTeam)),
-                    mod.GetObjectPosition(player)),
-                30)) {
-                mod.AISetMoveSpeed(player, mod.MoveSpeed.Sprint)
-            } else {
-                mod.AISetMoveSpeed(player, mod.MoveSpeed.InvestigateRun)
-            }
+        if (!mod.IsPlayerValid(player) ||
+            !mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive) ||
+            mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle)) return;
+
+        const playerState = getPlayerState(player);
+        const playerTeam = playerState.team;
+        const allCapturePoints = mod.AllCapturePoints();
+        const enemyOwnedCapturePoints = filterModArray(
+            allCapturePoints,
+            (capturePoint: any) => mod.NotEqualTo(playerTeam, mod.GetCurrentOwnerTeam(capturePoint)));
+
+        if (mod.CountOf(enemyOwnedCapturePoints) === 0) {
+            const ownedCapturePoints = filterModArray(
+                allCapturePoints,
+                (capturePoint: any) => mod.Equals(playerTeam, mod.GetCurrentOwnerTeam(capturePoint)));
+            playerState.aiTarget = mod.RandomValueInArray(ownedCapturePoints);
+            mod.AIDefendPositionBehavior(player, mod.GetObjectPosition(playerState.aiTarget!), 0, 30)
+        } else {
+            playerState.aiTarget = mod.RandomValueInArray(enemyOwnedCapturePoints);
+            mod.AIMoveToBehavior(player, mod.GetObjectPosition(playerState.aiTarget!))
+        }
+
+        const playerPosition = mod.GetObjectPosition(player);
+        const closestEnemy = mod.ClosestPlayerTo(playerPosition, getTeamState(playerTeam).otherTeam);
+        const closestEnemyDistance = mod.DistanceBetween(mod.GetObjectPosition(closestEnemy), playerPosition);
+        if (closestEnemyDistance > 30) {
+            mod.AISetMoveSpeed(player, mod.MoveSpeed.Sprint)
+        } else {
+            mod.AISetMoveSpeed(player, mod.MoveSpeed.InvestigateRun)
         }
     }
 }
