@@ -77,9 +77,20 @@ const audio = {
 
 let snowVolume: mod.SpatialObject | null = null;
 
-// Static Portal Arrays
+// Static Arrays
 
-let flagAnnounce: mod.Array;
+const flagAnnounce: mod.VoiceOverFlags[] = [
+    mod.VoiceOverFlags.Alpha,
+    mod.VoiceOverFlags.Bravo,
+    mod.VoiceOverFlags.Charlie,
+    mod.VoiceOverFlags.Delta,
+    mod.VoiceOverFlags.Echo,
+    mod.VoiceOverFlags.Foxtrot,
+    mod.VoiceOverFlags.Golf,
+    mod.VoiceOverFlags.Hotel,
+    mod.VoiceOverFlags.India,
+];
+
 let flagLetters: mod.Array;
 let botNames: mod.Array;
 let objectiveTrackingUI: mod.Array;
@@ -321,7 +332,6 @@ function initStaticArrays(): void {
     initObjectiveLetters();
     initObjectiveTeamUI();
     initBotNames();
-    initFlagCalls();
 }
 
 function initPlayerState(player: mod.Player): PlayerState {
@@ -1287,12 +1297,9 @@ class CapturePointController {
         }
         this.spawnObjectiveVehicles(eventInfo)
         if (FLAGS.ENABLE_VO) {
-            mod.PlayVO(audio.vo1!, mod.VoiceOverEvents2D.ObjectiveCaptured, mod.ValueInArray(flagAnnounce, mod.Subtract(
-                mod.GetObjId(eventInfo.eventCapturePoint),
-                200)), mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))
-            mod.PlayVO(audio.vo2!, mod.VoiceOverEvents2D.ObjectiveCapturedEnemy, mod.ValueInArray(flagAnnounce, mod.Subtract(
-                mod.GetObjId(eventInfo.eventCapturePoint),
-                200)), getTeamState(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)).otherTeam)
+            const flag = flagAnnounce[mod.GetObjId(eventInfo.eventCapturePoint) - 200];
+            mod.PlayVO(audio.vo1!, mod.VoiceOverEvents2D.ObjectiveCaptured, flag, mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo2!, mod.VoiceOverEvents2D.ObjectiveCapturedEnemy, flag, getTeamState(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)).otherTeam)
         }
     }
 
@@ -1327,17 +1334,12 @@ class CapturePointController {
         uiController.updateFlagIcons()
         await mod.Wait(0.2)
         uiController.updateScoreboard()
+        const flag = flagAnnounce[mod.GetObjId(eventInfo.eventCapturePoint) - 200];
         if (mod.NotEqualTo(mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint), mod.GetTeam(0))) {
-            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveNeutralised, mod.ValueInArray(flagAnnounce, mod.Subtract(
-                mod.GetObjId(eventInfo.eventCapturePoint),
-                200)), mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
-            mod.PlayVO(audio.vo4!, mod.VoiceOverEvents2D.ObjectiveLost, mod.ValueInArray(flagAnnounce, mod.Subtract(
-                mod.GetObjId(eventInfo.eventCapturePoint),
-                200)), mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveNeutralised, flag, mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo4!, mod.VoiceOverEvents2D.ObjectiveLost, flag, mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint))
         } else {
-            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveCapturing, mod.ValueInArray(flagAnnounce, mod.Subtract(
-                mod.GetObjId(eventInfo.eventCapturePoint),
-                200)), mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveCapturing, flag, mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
         }
     }
 
@@ -2563,19 +2565,6 @@ function initBotNames() {
     for (const name of names) {
         botNames = mod.AppendToArray(botNames, name);
     }
-}
-
-function initFlagCalls() {
-    flagAnnounce = mod.EmptyArray();
-    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Alpha);
-    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Bravo);
-    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Charlie);
-    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Delta);
-    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Echo);
-    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Foxtrot);
-    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Golf);
-    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.Hotel);
-    flagAnnounce = mod.AppendToArray(flagAnnounce, mod.VoiceOverFlags.India);
 }
 
 export function OngoingGlobal() {
