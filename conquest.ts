@@ -92,8 +92,77 @@ const flagAnnounce: mod.VoiceOverFlags[] = [
 ];
 
 let flagLetters: mod.Array;
-let botNames: mod.Array;
 let objectiveTrackingUI: mod.Array;
+
+const botNames: string[] = [
+    "andy6170 (Bot)",
+    "TheOzzy (Bot)",
+    "Mancour (Bot)",
+    "gala_vs (Bot)",
+    "BattlefieldDad (Bot)",
+    "Matavatar (Bot)",
+    "ToughKarma (Bot)",
+    "extermin8or_ (Bot)",
+    "Draco25240 (Bot)",
+    "CodeName_Deus (Bot)",
+    "TonisGaming (Bot)",
+    "SCKGaming (Bot)",
+    "HybridBeard0 (Bot)",
+    "ClaraTheRed (Bot)",
+    "PrincessTeacup (Bot)",
+    "Haze (Bot)",
+    "Renette (Bot)",
+    "BT Zero (Bot)",
+    "Thirsty Wizard (Bot)",
+    "SwarmFly (Bot)",
+    "Sheer Iceman (Bot)",
+    "Daniel VNZ (Bot)",
+    "Languorian (Bot)",
+    "zbmts (Bot)",
+    "Joshua (Bot)",
+    "Richard (Bot)",
+    "Dirteebreaks (Bot)",
+    "Mystfit (Bot)",
+    "Shorty (Bot)",
+    "tango (Bot)",
+    "Beam (Bot)",
+    "C¥pher (Bot)",
+    "ThirdEyeAgent (Bot)",
+    "floris12fs (Bot)",
+    "oleole56 (Bot)",
+    "LadyArsenic (Bot)",
+    "Akira72 (Bot)",
+    "KieranP (Bot)",
+    "warcreator (Bot)",
+    "Cytochrome2 (Bot)",
+    "LT D.A.L.E. (Bot)",
+    "Kale (Bot)",
+    "OutlawSkot33 (Bot)",
+    "F4rus (Bot)",
+    "TabbedScamper (Bot)",
+    "reni2 (Bot)",
+    "AP_Atipoya (Bot)",
+    "m1kedeluca_ (Bot)",
+    "Ariistuujj (Bot)",
+    "Marcus (DJsparco) (Bot)",
+    "Hope (Bot)",
+    "pompom (Bot)",
+    "mindflexor (Bot)",
+    "Robert5974 (Bot)",
+    "Ricelletis (Bot)",
+    "cczzcx (Bot)",
+    "Fobia_BGa (Bot)",
+    "Nodone (Bot)",
+    "Crush (Bot)",
+    "EIGuimaraes (Bot)",
+    "Bennen (Bot)",
+    "Mary (Bot)",
+    "dzonzla_ (Bot)",
+    "L0gan-M-Sc0tt (Bot)",
+    "FaithWalker (Bot)",
+    "SgtHamster (Bot)",
+    "LoganTheBrawler (Bot)",
+];
 
 // Player State
 
@@ -331,7 +400,6 @@ function initStaticArrays(): void {
     // Populate static arrays
     initObjectiveLetters();
     initObjectiveTeamUI();
-    initBotNames();
 }
 
 function initPlayerState(player: mod.Player): PlayerState {
@@ -1749,7 +1817,7 @@ class AIController {
             if (mod.LessThan(
                 mod.CountOf(mod.AllPlayers()),
                 CONFIG.MAX_CUSTOM_AI)) {
-                const botNameCount = mod.CountOf(botNames);
+                const botNameCount = botNames.length;
                 if (botNameCount <= 0) return;
                 if (mod.GreaterThan(
                     mod.CountOf(filterModArray(
@@ -1762,9 +1830,9 @@ class AIController {
                         (currentArrayElement: any) => mod.Equals(
                             mod.GetTeam(currentArrayElement),
                             mod.GetTeam(2)))))) {
-                    mod.SpawnAIFromAISpawner(mod.GetSpawner(902), mod.Message(mod.ValueInArray(botNames, botNameIndex)), mod.GetTeam(2))
+                    mod.SpawnAIFromAISpawner(mod.GetSpawner(902), mod.Message(botNames[botNameIndex]), mod.GetTeam(2))
                 } else {
-                    mod.SpawnAIFromAISpawner(mod.GetSpawner(901), mod.Message(mod.ValueInArray(botNames, botNameIndex)), mod.GetTeam(1))
+                    mod.SpawnAIFromAISpawner(mod.GetSpawner(901), mod.Message(botNames[botNameIndex]), mod.GetTeam(1))
                 }
                 botNameIndex = (botNameIndex + 1) % botNameCount;
             }
@@ -2488,82 +2556,6 @@ function initObjectiveTeamUI() {
             const letter = String.fromCharCode(code);
             objectiveTrackingUI = mod.AppendToArray(objectiveTrackingUI, letter + suffix);
         }
-    }
-}
-
-function initBotNames() {
-    const names: string[] = [
-        "andy6170 (Bot)",
-        "TheOzzy (Bot)",
-        "Mancour (Bot)",
-        "gala_vs (Bot)",
-        "BattlefieldDad (Bot)",
-        "Matavatar (Bot)",
-        "ToughKarma (Bot)",
-        "extermin8or_ (Bot)",
-        "Draco25240 (Bot)",
-        "CodeName_Deus (Bot)",
-        "TonisGaming (Bot)",
-        "SCKGaming (Bot)",
-        "HybridBeard0 (Bot)",
-        "ClaraTheRed (Bot)",
-        "PrincessTeacup (Bot)",
-        "Haze (Bot)",
-        "Renette (Bot)",
-        "BT Zero (Bot)",
-        "Thirsty Wizard (Bot)",
-        "SwarmFly (Bot)",
-        "Sheer Iceman (Bot)",
-        "Daniel VNZ (Bot)",
-        "Languorian (Bot)",
-        "zbmts (Bot)",
-        "Joshua (Bot)",
-        "Richard (Bot)",
-        "Dirteebreaks (Bot)",
-        "Mystfit (Bot)",
-        "Shorty (Bot)",
-        "tango (Bot)",
-        "Beam (Bot)",
-        "C¥pher (Bot)",
-        "ThirdEyeAgent (Bot)",
-        "floris12fs (Bot)",
-        "oleole56 (Bot)",
-        "LadyArsenic (Bot)",
-        "Akira72 (Bot)",
-        "KieranP (Bot)",
-        "warcreator (Bot)",
-        "Cytochrome2 (Bot)",
-        "LT D.A.L.E. (Bot)",
-        "Kale (Bot)",
-        "OutlawSkot33 (Bot)",
-        "F4rus (Bot)",
-        "TabbedScamper (Bot)",
-        "reni2 (Bot)",
-        "AP_Atipoya (Bot)",
-        "m1kedeluca_ (Bot)",
-        "Ariistuujj (Bot)",
-        "Marcus (DJsparco) (Bot)",
-        "Hope (Bot)",
-        "pompom (Bot)",
-        "mindflexor (Bot)",
-        "Robert5974 (Bot)",
-        "Ricelletis (Bot)",
-        "cczzcx (Bot)",
-        "Fobia_BGa (Bot)",
-        "Nodone (Bot)",
-        "Crush (Bot)",
-        "EIGuimaraes (Bot)",
-        "Bennen (Bot)",
-        "Mary (Bot)",
-        "dzonzla_ (Bot)",
-        "L0gan-M-Sc0tt (Bot)",
-        "FaithWalker (Bot)",
-        "SgtHamster (Bot)",
-        "LoganTheBrawler (Bot)",
-    ];
-    botNames = mod.EmptyArray();
-    for (const name of names) {
-        botNames = mod.AppendToArray(botNames, name);
     }
 }
 
