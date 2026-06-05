@@ -31,6 +31,8 @@ const FLAGS = {
     SNOW_COLOUR_FILTER: false,
 } as const;
 
+const ZERO_VECTOR = mod.CreateVector(0, 0, 0);
+
 // EVENT INFO TYPES
 type PlayerEventInfo = { eventPlayer: mod.Player };
 type PlayerCombatEventInfo = {
@@ -438,8 +440,14 @@ function playerRootWidgetName(playerId: number): string {
     return "PlayerRoot_" + playerId;
 }
 
+function deleteUIWidgetWithNameIfExists(name: string): void {
+    const widget = mod.FindUIWidgetWithName(name) as mod.UIWidget | undefined | null;
+    if (widget === undefined || widget === null) return;
+    mod.DeleteUIWidget(widget);
+}
+
 function removePlayerStateById(playerId: number): void {
-    mod.DeleteUIWidget(mod.FindUIWidgetWithName(playerRootWidgetName(playerId)));
+    deleteUIWidgetWithNameIfExists(playerRootWidgetName(playerId));
     const state = playerStates.get(playerId);
     if (state) {
         playerStates.delete(playerId);
@@ -772,7 +780,7 @@ class UIController {
         const rootName = playerRootWidgetName(playerId);
         getPlayerState(player).uniqueUiId = rootName;
 
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName(rootName));
+        deleteUIWidgetWithNameIfExists(rootName);
         mod.AddUIContainer(rootName, mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 0), mod.UIAnchor.TopCenter, player)
         mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName(rootName), mod.UIBgFill.None)
         mod.SetUIWidgetDepth(mod.FindUIWidgetWithName(rootName), mod.UIDepth.AboveGameUI)
@@ -1267,17 +1275,11 @@ class PlayerController {
     }
 
     async onJoin(player: mod.Player): Promise<void> {
-        getPlayerState(player).captureProgressTick = 0;
-        getPlayerState(player).outOfBoundsCountdown = -1;
-        getPlayerState(player).captureSessionActive = false;
-        getPlayerState(player).isOutOfBounds = false;
-        getPlayerState(player).ignoreOOB = false;
-        getPlayerState(player).aiInAction = false;
+        initPlayerState(player);
         await mod.Wait(1)
         if (mod.IsPlayerValid(player)) {
             uiController.updatePlayerScoreboard(player)
             if (mod.Not(mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier))) {
-                mod.SendErrorReport(mod.Message("Player Joined {}", player))
                 uiController.setupPlayerUI(player)
                 await mod.Wait(5)
                 if (isGameOngoing) {
@@ -1731,7 +1733,10 @@ class AIController {
 
         const teleportToSpawnObjectiveAndTryVehicle = () => {
             mod.Teleport(player, mod.GetObjectPosition(mod.RandomValueInArray(playerState.aiSpawnPoints)), 1)
-            this.deployAIVehicle(mod.RandomValueInArray(openVehicles()), 60, eventInfo)
+            const vehicles = openVehicles();
+            if (mod.CountOf(vehicles) > 0) {
+                this.deployAIVehicle(mod.RandomValueInArray(vehicles), 60, eventInfo)
+            }
         };
 
         if (!mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle)) {
@@ -1757,13 +1762,14 @@ class AIController {
         }
     }
 
-    deployAIVehicle(vehicle: mod.Vehicle, distance: number, eventInfo: PlayerEventInfo): void {
-        const player = eventInfo.eventPlayer;
+    deployAIVehicle(vehicle: mod.Vehicle | undefined, distance: number, eventInfo: PlayerEventInfo): void {
+        if (!vehicle) return;
 
+        const player = eventInfo.eventPlayer;
         if (mod.IsPlayerValid(player) && !mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle)) {
             const vehiclePosition = mod.GetVehicleState(vehicle, mod.VehicleStateVector.VehiclePosition);
             const playerPosition = mod.GetObjectPosition(player);
-            if (mod.DistanceBetween(vehiclePosition, playerPosition) < distance) {
+            if (vehiclePosition && playerPosition && mod.DistanceBetween(vehiclePosition, playerPosition) < distance) {
                 mod.AIBattlefieldBehavior(player)
                 mod.ForcePlayerToSeat(player, vehicle, -1)
             }
@@ -1784,7 +1790,9 @@ class AIController {
                     mod.DistanceBetween(
                         mod.GetVehicleState(vehicle, mod.VehicleStateVector.VehiclePosition),
                         playerPosition) < 150);
-            this.deployAIVehicle(mod.RandomValueInArray(nearbyOpenVehicles), 150, eventInfo)
+            if (mod.CountOf(nearbyOpenVehicles) > 0) {
+                this.deployAIVehicle(mod.RandomValueInArray(nearbyOpenVehicles), 150, eventInfo)
+            }
         }
 
         await mod.Wait(0.2)
@@ -1953,42 +1961,45 @@ class ConquestGame {
     }
 
     async setupMap(): Promise<void> {
+        const spawnAudio = (asset: mod.RuntimeSpawn_Common) => mod.SpawnObject(asset, ZERO_VECTOR, ZERO_VECTOR, ZERO_VECTOR);
+        const capturePoints = mod.AllCapturePoints();
+
         mod.SetGameModeTimeLimit(CONFIG.TIME_LIMIT)
         mod.SetGameModeTargetScore(1)
         mod.SetVehicleCategoryAllowedInSurroundingArea(mod.VehicleCategories.Air_All, true)
-        if (mod.IsFaction(mod.GetTeam(1), mod.Factions.NATO)) {
-            getTeamState(TEAM_1).faction = "NATO";
-        } else {
-            getTeamState(TEAM_1).faction = "PAX";
-        }
-        if (mod.IsFaction(mod.GetTeam(2), mod.Factions.NATO)) {
-            getTeamState(TEAM_2).faction = "NATO";
-        } else {
-            getTeamState(TEAM_2).faction = "PAX";
-        }
+
+        getTeamState(TEAM_1).faction = mod.IsFaction(TEAM_1, mod.Factions.NATO) ? "NATO" : "PAX";
+        getTeamState(TEAM_2).faction = mod.IsFaction(TEAM_2, mod.Factions.NATO) ? "NATO" : "PAX";
+
         uiController.setupMainUI()
         uiController.updateScoreboard()
         uiController.updateFlagIcons()
         if (FLAGS.ENABLE_SNOW) {
-            snowVolume = mod.SpawnObject(mod.RuntimeSpawn_Common.EnvironmentDecalVolume_Winter_Event, mod.GetObjectPosition(mod.GetCapturePoint(200)), mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 10000));
+            snowVolume = mod.SpawnObject(
+                mod.RuntimeSpawn_Common.EnvironmentDecalVolume_Winter_Event,
+                mod.GetObjectPosition(mod.GetCapturePoint(200)),
+                ZERO_VECTOR,
+                mod.CreateVector(10000, 10000, 10000));
         }
         uiController.setupColourFilter()
-        for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
-            capturePointController.setupCapturePoint(mod.ValueInArray(mod.AllCapturePoints(), i))
+        for (let i = 0; i < mod.CountOf(capturePoints); i++) {
+            capturePointController.setupCapturePoint(mod.ValueInArray(capturePoints, i))
         }
         mod.SetUnspawnDelayInSeconds(mod.GetSpawner(901), 300)
         mod.SetUnspawnDelayInSeconds(mod.GetSpawner(902), 300)
         uiController.showVersion()
-        audio.vo1 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-        audio.vo2 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-        audio.vo3 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-        audio.vo4 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-        audio.vo5 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-        audio.vo6 = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-        audio.tickSoundTaking = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickIcon_IsFriendly_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-        audio.tickSoundLosing = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickEnemy_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-        audio.capturedSound = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_OnCapturedByFriendly_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
-        audio.oobSound = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_OutOfBounds_Countdown_OneShot2D, mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0), mod.CreateVector(0, 0, 0));
+
+        audio.vo1 = spawnAudio(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D);
+        audio.vo2 = spawnAudio(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D);
+        audio.vo3 = spawnAudio(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D);
+        audio.vo4 = spawnAudio(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D);
+        audio.vo5 = spawnAudio(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D);
+        audio.vo6 = spawnAudio(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D);
+        audio.tickSoundTaking = spawnAudio(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickIcon_IsFriendly_OneShot2D);
+        audio.tickSoundLosing = spawnAudio(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickEnemy_OneShot2D);
+        audio.capturedSound = spawnAudio(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_OnCapturedByFriendly_OneShot2D);
+        audio.oobSound = spawnAudio(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_OutOfBounds_Countdown_OneShot2D);
+
         mod.PlayMusic(mod.MusicEvents.Core_LastPhaseBegin)
         mod.LoadMusic(mod.MusicPackages.Core)
         await mod.Wait(2)
