@@ -1270,7 +1270,8 @@ class CapturePointController {
         mod.PlaySound(audio.capturedSound!, 0.7, player)
     }
 
-    onCaptured(eventInfo: CapturePointEventInfo): void {
+    async onCaptured(eventInfo: CapturePointEventInfo): Promise<void> {
+        await mod.Wait(0.2)
         uiController.updateScoreboard()
         uiController.updateFlagIcons()
         const playersOnObjective = filterModArray(
@@ -2159,359 +2160,331 @@ const conquestGame = new ConquestGame();
 // ============================================================
 
 function initGameSettingsRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.InitGameSettings);
-    let newState = true;
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.InitGameSettings);
+    const state = true;
+    if (condition.update(state)) {
+        conquestGame.initGameSettings();
     }
-    conquestGame.initGameSettings();
 }
 
 function setupMapRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.SetupMap);
-    let newState = true;
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.SetupMap);
+    const state = true;
+    if (condition.update(state)) {
+        conquestGame.setupMap();
     }
-    conquestGame.setupMap();
 }
 
 function updateScoreTimeRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.UpdateScoreTime);
-    let newState = conquestGame.shouldUpdateScoreTime();
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.UpdateScoreTime);
+    const state = conquestGame.shouldUpdateScoreTime();
+    if (condition.update(state)) {
+        conquestGame.updateScoreTimeAndAI();
     }
-    conquestGame.updateScoreTimeAndAI();
 }
 
 function updateScoreTimeSecondaryTickRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.UpdateScoreTimeSecondaryTick);
-    let newState = conquestGame.shouldUpdateScoreTimeOddTick();
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.UpdateScoreTimeSecondaryTick);
+    const state = conquestGame.shouldUpdateScoreTimeOddTick();
+    if (condition.update(state)) {
+        conquestGame.updateScoreTimeAndAISecondaryTick();
     }
-    conquestGame.updateScoreTimeAndAISecondaryTick();
 }
 
 function trackScoreRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.TrackScore);
-    let newState = conquestGame.shouldTrackScore();
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.TrackScore);
+    const state = conquestGame.shouldTrackScore();
+    if (condition.update(state)) {
+        conquestGame.trackScoreAndBleed();
     }
-    conquestGame.trackScoreAndBleed();
 }
 
 function processKillRule(eventInfo: PlayerCombatEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ProcessKill);
-    let newState = playerController.shouldProcessKill(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ProcessKill);
+    const state = playerController.shouldProcessKill(eventInfo);
+    if (condition.update(state)) {
+        playerController.processKill(eventInfo);
     }
-    playerController.processKill(eventInfo);
 }
 
 function processAssistRule(eventInfo: PlayerCombatEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ProcessAssist);
-    let newState = playerController.shouldProcessAssist(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ProcessAssist);
+    const state = playerController.shouldProcessAssist(eventInfo);
+    if (condition.update(state)) {
+        playerController.processAssist(eventInfo);
     }
-    playerController.processAssist(eventInfo);
 }
 
 function processReviveRule(eventInfo: PlayerCombatEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ProcessRevive);
-    let newState = true;
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ProcessRevive);
+    const state = true;
+    if (condition.update(state)) {
+        playerController.processRevive(eventInfo);
     }
-    playerController.processRevive(eventInfo);
 }
 
 function handlePlayerDeathRule(eventInfo: PlayerCombatEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HandlePlayerDeath);
-    let newState = true;
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HandlePlayerDeath);
+    const state = true;
+    if (condition.update(state)) {
+        playerController.handleDeath(eventInfo);
     }
-    playerController.handleDeath(eventInfo);
 }
 
 function addEquipmentRule(eventInfo: PlayerEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AddEquipment);
-    let newState = true;
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AddEquipment);
+    const state = true;
+    if (condition.update(state)) {
+        playerController.addEquipment(eventInfo.eventPlayer);
     }
-    playerController.addEquipment(eventInfo.eventPlayer);
 }
 
 function handlePlayerJoinRule(eventInfo: PlayerEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HandlePlayerJoin);
-    let newState = true;
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HandlePlayerJoin);
+    const state = true;
+    if (condition.update(state)) {
+        playerController.onJoin(eventInfo.eventPlayer);
     }
-    playerController.onJoin(eventInfo.eventPlayer);
 }
 
 function updateDeathOnUndeployRule(eventInfo: PlayerEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.UpdateDeathOnUndeploy);
-    let newState = playerController.shouldUndeploy(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.UpdateDeathOnUndeploy);
+    const state = playerController.shouldUndeploy(eventInfo);
+    if (condition.update(state)) {
+        playerController.onUndeploy(eventInfo);
     }
-    playerController.onUndeploy(eventInfo);
 }
 
-async function handleCapturePointCapturedRule(eventInfo: CapturePointEventInfo) {
-    const conditionState = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.HandleCaptured);
-    let newState = true;
-    if (!conditionState.update(newState)) {
-        return;
+function handleCapturePointCapturedRule(eventInfo: CapturePointEventInfo) {
+    const condition = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.HandleCaptured);
+    const state = true;
+    if (condition.update(state)) {
+        capturePointController.onCaptured(eventInfo);
     }
-    await mod.Wait(0.2)
-    capturePointController.onCaptured(eventInfo);
 }
 
-async function notifyCaptureRule(eventInfo: CapturePointEventInfo) {
-    const conditionState = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.NotifyCapture);
-    let newState = capturePointController.shouldNotifyCapture(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+function notifyCaptureRule(eventInfo: CapturePointEventInfo) {
+    const condition = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.NotifyCapture);
+    const state = capturePointController.shouldNotifyCapture(eventInfo);
+    if (condition.update(state)) {
+        capturePointController.onCapturing(eventInfo);
     }
-    await capturePointController.onCapturing(eventInfo);
 }
 
 function playNearEndMusicRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayNearEndMusic);
-    let newState = conquestGame.shouldPlayNearEndMusic();
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.PlayNearEndMusic);
+    const state = conquestGame.shouldPlayNearEndMusic();
+    if (condition.update(state)) {
+        conquestGame.playNearEndMusic();
     }
-    conquestGame.playNearEndMusic();
 }
 
 function endGameRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.EndGame);
-    let newState = conquestGame.shouldEndGame();
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.EndGame);
+    const state = conquestGame.shouldEndGame();
+    if (condition.update(state)) {
+        conquestGame.endGame();
     }
-    conquestGame.endGame();
 }
 
 function showCaptureUIRule(eventInfo: PlayerCapturePointEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ShowCaptureUI);
-    let newState = capturePointController.shouldShowCaptureUI(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ShowCaptureUI);
+    const state = capturePointController.shouldShowCaptureUI(eventInfo);
+    if (condition.update(state)) {
+        capturePointController.showCaptureUI(eventInfo);
     }
-    capturePointController.showCaptureUI(eventInfo);
 }
 
 function hideCaptureUIRule(eventInfo: PlayerCapturePointEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HideCaptureUI);
-    let newState = capturePointController.shouldHideCaptureUI(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HideCaptureUI);
+    const state = capturePointController.shouldHideCaptureUI(eventInfo);
+    if (condition.update(state)) {
+        capturePointController.hideCaptureUI(eventInfo);
     }
-    capturePointController.hideCaptureUI(eventInfo);
 }
 
 function updatePlayerCountOnDeathRule(eventInfo: PlayerEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.UpdatePlayerCountOnDeath);
-    let newState = capturePointController.shouldUpdatePlayerCountOnDeath(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.UpdatePlayerCountOnDeath);
+    const state = capturePointController.shouldUpdatePlayerCountOnDeath(eventInfo);
+    if (condition.update(state)) {
+        capturePointController.updatePlayerCountOnDeath(eventInfo);
     }
-    capturePointController.updatePlayerCountOnDeath(eventInfo);
 }
 
 function updatePlayerCountOnReviveRule(eventInfo: PlayerEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.UpdatePlayerCountOnRevive);
-    let newState = capturePointController.shouldUpdatePlayerCountOnRevive(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.UpdatePlayerCountOnRevive);
+    const state = capturePointController.shouldUpdatePlayerCountOnRevive(eventInfo);
+    if (condition.update(state)) {
+        capturePointController.updatePlayerCountOnRevive(eventInfo);
     }
-    capturePointController.updatePlayerCountOnRevive(eventInfo);
 }
 
 function handleTeamSwitchAndRepelRule(eventInfo: { eventPlayer: mod.Player; eventInteractPoint: mod.InteractPoint }) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HandleTeamSwitchAndRepel);
-    let newState = true;
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HandleTeamSwitchAndRepel);
+    const state = true;
+    if (condition.update(state)) {
+        playerController.handleTeamSwitchAndRepel(eventInfo);
     }
-    playerController.handleTeamSwitchAndRepel(eventInfo);
 }
 
 function enterAreaTriggerRule(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.EnterAreaTrigger);
-    let newState = playerController.shouldEnterAreaTrigger(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.EnterAreaTrigger);
+    const state = playerController.shouldEnterAreaTrigger(eventInfo);
+    if (condition.update(state)) {
+        playerController.enterAreaTrigger(eventInfo);
     }
-    playerController.enterAreaTrigger(eventInfo);
 }
 
 function exitAreaTriggerRule(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ExitAreaTrigger);
-    let newState = playerController.shouldExitAreaTrigger(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ExitAreaTrigger);
+    const state = playerController.shouldExitAreaTrigger(eventInfo);
+    if (condition.update(state)) {
+        playerController.exitAreaTrigger(eventInfo);
     }
-    playerController.exitAreaTrigger(eventInfo);
 }
 
 function playVOLowTimeRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayVOLowTime);
-    let newState = conquestGame.shouldPlayVOLowTime();
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.PlayVOLowTime);
+    const state = conquestGame.shouldPlayVOLowTime();
+    if (condition.update(state)) {
+        conquestGame.playVOLowTime();
     }
-    conquestGame.playVOLowTime();
 }
 
 function playVOWinningRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayVOWinning);
-    let newState = conquestGame.shouldPlayVOWinning();
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.PlayVOWinning);
+    const state = conquestGame.shouldPlayVOWinning();
+    if (condition.update(state)) {
+        conquestGame.playVOWinning();
     }
-    conquestGame.playVOWinning();
 }
 
 function playVOTeam2WinningRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayVOTeam2Winning);
-    let newState = conquestGame.shouldPlayVOTeam2Winning();
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.PlayVOTeam2Winning);
+    const state = conquestGame.shouldPlayVOTeam2Winning();
+    if (condition.update(state)) {
+        conquestGame.playVOTeam2Winning();
     }
-    conquestGame.playVOTeam2Winning();
 }
 
 function playVOLowTicketsRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayVOLowTickets);
-    let newState = conquestGame.shouldPlayVOLowTickets();
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.PlayVOLowTickets);
+    const state = conquestGame.shouldPlayVOLowTickets();
+    if (condition.update(state)) {
+        conquestGame.playVOLowTickets();
     }
-    conquestGame.playVOLowTickets();
 }
 
 function playVOTeam2LowTicketsRule() {
-    const conditionState = getGlobalCondition(GlobalConditionSlot.PlayVOTeam2LowTickets);
-    let newState = conquestGame.shouldPlayVOTeam2LowTickets();
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getGlobalCondition(GlobalConditionSlot.PlayVOTeam2LowTickets);
+    const state = conquestGame.shouldPlayVOTeam2LowTickets();
+    if (condition.update(state)) {
+        conquestGame.playVOTeam2LowTickets();
     }
-    conquestGame.playVOTeam2LowTickets();
 }
 
 function runCaptureProgressRule(eventInfo: CapturePointEventInfo) {
-    const conditionState = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.RunProgressLoop);
-    let newState = true;
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.RunProgressLoop);
+    const state = true;
+    if (condition.update(state)) {
+        capturePointController.runProgressLoop(eventInfo);
     }
-    capturePointController.runProgressLoop(eventInfo);
 }
 
 function aiScoutOnDeployRule(eventInfo: PlayerEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIScoutOnDeploy);
-    let newState = aiController.shouldScoutOnDeploy(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIScoutOnDeploy);
+    const state = aiController.shouldScoutOnDeploy(eventInfo);
+    if (condition.update(state)) {
+        aiController.deployScout(eventInfo);
     }
-    aiController.deployScout(eventInfo);
 }
 
 function aiFindNewObjectiveRule(eventInfo: PlayerCapturePointEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIFindNewObjective);
-    let newState = aiController.shouldFindNewObjective(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIFindNewObjective);
+    const state = aiController.shouldFindNewObjective(eventInfo);
+    if (condition.update(state)) {
+        aiController.findNewObjective(eventInfo);
     }
-    aiController.findNewObjective(eventInfo);
 }
 
 function aiReadyForAttackRule(eventInfo: PlayerEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIReadyForAttack);
-    let newState = aiController.shouldReadyForAttack(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIReadyForAttack);
+    const state = aiController.shouldReadyForAttack(eventInfo);
+    if (condition.update(state)) {
+        aiController.readyForAttack(eventInfo);
     }
-    aiController.readyForAttack(eventInfo);
 }
 
 function aiTargetDamagerRule(eventInfo: PlayerCombatEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetDamager);
-    let newState = aiController.shouldTargetDamager(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetDamager);
+    const state = aiController.shouldTargetDamager(eventInfo);
+    if (condition.update(state)) {
+        aiController.targetDamager(eventInfo);
     }
-    aiController.targetDamager(eventInfo);
 }
 
 function aiExitVehicleRule(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIExitVehicle);
-    let newState = aiController.shouldExitVehicle(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIExitVehicle);
+    const state = aiController.shouldExitVehicle(eventInfo);
+    if (condition.update(state)) {
+        aiController.exitVehicle(eventInfo);
     }
-    aiController.exitVehicle(eventInfo);
 }
 
 function aiEnterVehicleRule(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIEnterVehicle);
-    let newState = aiController.shouldEnterVehicle(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIEnterVehicle);
+    const state = aiController.shouldEnterVehicle(eventInfo);
+    if (condition.update(state)) {
+        aiController.enterVehicle(eventInfo);
     }
-    aiController.enterVehicle(eventInfo);
 }
 
 function aiRetryMoveRule(eventInfo: PlayerEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIRetryMove);
-    let newState = aiController.shouldRetryMove(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIRetryMove);
+    const state = aiController.shouldRetryMove(eventInfo);
+    if (condition.update(state)) {
+        aiController.retryMove(eventInfo);
     }
-    aiController.retryMove(eventInfo);
 }
 
 function aiTargetOnKillRule(eventInfo: PlayerCombatEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetOnKill);
-    let newState = aiController.shouldTargetOnKill(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetOnKill);
+    const state = aiController.shouldTargetOnKill(eventInfo);
+    if (condition.update(state)) {
+        aiController.targetOnKill(eventInfo);
     }
-    aiController.targetOnKill(eventInfo);
 }
 
 function aiTargetOnKillAssistRule(eventInfo: PlayerCombatEventInfo) {
-    const conditionState = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetOnKillAssist);
-    let newState = aiController.shouldTargetOnKillAssist(eventInfo);
-    if (!conditionState.update(newState)) {
-        return;
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetOnKillAssist);
+    const state = aiController.shouldTargetOnKillAssist(eventInfo);
+    if (condition.update(state)) {
+        aiController.targetOnKillAssist(eventInfo);
     }
-    aiController.targetOnKillAssist(eventInfo);
 }
 
 function initObjectiveLetters() {
+    const first = "A".charCodeAt(0);
+    const last = "Z".charCodeAt(0);
+
     flagLetters = mod.EmptyArray();
-    for (let i = 0; i < 26; i++) {
-        flagLetters = mod.AppendToArray(flagLetters, String.fromCharCode(65 + i));
+    for (let code = first; code <= last; code++) {
+        const letter = String.fromCharCode(code);
+        flagLetters = mod.AppendToArray(flagLetters, letter);
     }
 }
+
 function initObjectiveTeamUI() {
+    const first = "A".charCodeAt(0);
+    const last = "Z".charCodeAt(0);
+    const firstSuffix = 1;
+    const lastSuffix = 4;
+
     objectiveTrackingUI = mod.EmptyArray();
-    for (let suffix = 1; suffix <= 4; suffix++) {
-        for (let i = 0; i < 26; i++) {
-            objectiveTrackingUI = mod.AppendToArray(objectiveTrackingUI, String.fromCharCode(65 + i) + suffix);
+    for (let suffix = firstSuffix; suffix <= lastSuffix; suffix++) {
+        for (let code = first; code <= last; code++) {
+            const letter = String.fromCharCode(code);
+            objectiveTrackingUI = mod.AppendToArray(objectiveTrackingUI, letter + suffix);
         }
     }
 }
