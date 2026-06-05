@@ -104,16 +104,10 @@ const flagLetters: string[] = [
     "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
 ];
 
-const objectiveTrackingUI: string[] = [
-    "A1", "B1", "C1", "D1", "E1", "F1", "G1", "H1", "I1", "J1", "K1", "L1", "M1",
-    "N1", "O1", "P1", "Q1", "R1", "S1", "T1", "U1", "V1", "W1", "X1", "Y1", "Z1",
-    "A2", "B2", "C2", "D2", "E2", "F2", "G2", "H2", "I2", "J2", "K2", "L2", "M2",
-    "N2", "O2", "P2", "Q2", "R2", "S2", "T2", "U2", "V2", "W2", "X2", "Y2", "Z2",
-    "A3", "B3", "C3", "D3", "E3", "F3", "G3", "H3", "I3", "J3", "K3", "L3", "M3",
-    "N3", "O3", "P3", "Q3", "R3", "S3", "T3", "U3", "V3", "W3", "X3", "Y3", "Z3",
-    "A4", "B4", "C4", "D4", "E4", "F4", "G4", "H4", "I4", "J4", "K4", "L4", "M4",
-    "N4", "O4", "P4", "Q4", "R4", "S4", "T4", "U4", "V4", "W4", "X4", "Y4", "Z4",
-];
+const team1ObjectiveTextUI = flagLetters.map((letter) => letter + "1");
+const team2ObjectiveTextUI = flagLetters.map((letter) => letter + "2");
+const team1ObjectiveOutlineUI = flagLetters.map((letter) => letter + "3");
+const team2ObjectiveOutlineUI = flagLetters.map((letter) => letter + "4");
 
 const botNames: string[] = [
     "andy6170 (Bot)",
@@ -659,28 +653,28 @@ class UIController {
         this.setupScoreUI("Team1ScoreLeft", "Team1ScoreRight", "Team1LeftBar", "Team1RightBar", mod.GetTeam(1))
         this.setupScoreUI("Team2ScoreLeft", "Team2ScoreRight", "Team2LeftBar", "Team2RightBar", mod.GetTeam(2))
         for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
-            mod.AddUIText(objectiveTrackingUI[i], mod.CreateVector(mod.Multiply(mod.Subtract(
+            mod.AddUIText(team1ObjectiveTextUI[i], mod.CreateVector(mod.Multiply(mod.Subtract(
                 i,
                 mod.Divide(
                     mod.Subtract(
                         mod.CountOf(mod.AllCapturePoints()),
                         1),
                     2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(flagLetters[i]), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
-            mod.AddUIText(objectiveTrackingUI[52 + i], mod.CreateVector(mod.Multiply(mod.Subtract(
+            mod.AddUIText(team1ObjectiveOutlineUI[i], mod.CreateVector(mod.Multiply(mod.Subtract(
                 i,
                 mod.Divide(
                     mod.Subtract(
                         mod.CountOf(mod.AllCapturePoints()),
                         1),
                     2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.OutlineThin, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
-            mod.AddUIText(objectiveTrackingUI[26 + i], mod.CreateVector(mod.Multiply(mod.Subtract(
+            mod.AddUIText(team2ObjectiveTextUI[i], mod.CreateVector(mod.Multiply(mod.Subtract(
                 i,
                 mod.Divide(
                     mod.Subtract(
                         mod.CountOf(mod.AllCapturePoints()),
                         1),
                     2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(flagLetters[i]), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
-            mod.AddUIText(objectiveTrackingUI[78 + i], mod.CreateVector(mod.Multiply(mod.Subtract(
+            mod.AddUIText(team2ObjectiveOutlineUI[i], mod.CreateVector(mod.Multiply(mod.Subtract(
                 i,
                 mod.Divide(
                     mod.Subtract(
@@ -826,35 +820,35 @@ class UIController {
 
     updateFlagIcons(): void {
         for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
-            if (mod.Equals(
-                mod.GetCurrentOwnerTeam(mod.GetCapturePoint(mod.Add(
-                    200,
-                    i))),
-                mod.GetTeam(1))) {
-                mod.SetUITextColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i]), friendlyTextColour)
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i]), friendlyBGColour)
-                mod.SetUITextColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 26]), enemyTextColour)
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 26]), enemyBGColour)
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 52]), friendlyTextColour)
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 78]), enemyTextColour)
-            } else if (mod.Equals(
-                mod.GetCurrentOwnerTeam(mod.GetCapturePoint(mod.Add(
-                    200,
-                    i))),
-                mod.GetTeam(2))) {
-                mod.SetUITextColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i]), enemyTextColour)
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i]), enemyBGColour)
-                mod.SetUITextColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 26]), friendlyTextColour)
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 26]), friendlyBGColour)
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 52]), enemyTextColour)
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 78]), friendlyTextColour)
+            const team1Text = mod.FindUIWidgetWithName(team1ObjectiveTextUI[i]);
+            const team2Text = mod.FindUIWidgetWithName(team2ObjectiveTextUI[i]);
+            const team1Outline = mod.FindUIWidgetWithName(team1ObjectiveOutlineUI[i]);
+            const team2Outline = mod.FindUIWidgetWithName(team2ObjectiveOutlineUI[i]);
+            const ownerTeam = mod.GetCurrentOwnerTeam(mod.GetCapturePoint(200 + i));
+
+            if (mod.Equals(ownerTeam, mod.GetTeam(1))) {
+                mod.SetUITextColor(team1Text, friendlyTextColour)
+                mod.SetUIWidgetBgColor(team1Text, friendlyBGColour)
+                mod.SetUITextColor(team2Text, enemyTextColour)
+                mod.SetUIWidgetBgColor(team2Text, enemyBGColour)
+                mod.SetUIWidgetBgColor(team1Outline, friendlyTextColour)
+                mod.SetUIWidgetBgColor(team2Outline, enemyTextColour)
+            } else if (mod.Equals(ownerTeam, mod.GetTeam(2))) {
+                mod.SetUITextColor(team1Text, enemyTextColour)
+                mod.SetUIWidgetBgColor(team1Text, enemyBGColour)
+                mod.SetUITextColor(team2Text, friendlyTextColour)
+                mod.SetUIWidgetBgColor(team2Text, friendlyBGColour)
+                mod.SetUIWidgetBgColor(team1Outline, enemyTextColour)
+                mod.SetUIWidgetBgColor(team2Outline, friendlyTextColour)
             } else {
-                mod.SetUITextColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i]), mod.CreateVector(0.9, 0.9, 0.9))
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i]), mod.CreateVector(0, 0, 0))
-                mod.SetUITextColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 26]), mod.CreateVector(0.9, 0.9, 0.9))
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 26]), mod.CreateVector(0, 0, 0))
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 52]), mod.CreateVector(0.9, 0.9, 0.9))
-                mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName(objectiveTrackingUI[i + 78]), mod.CreateVector(0.9, 0.9, 0.9))
+                const neutralTextColour = mod.CreateVector(0.9, 0.9, 0.9);
+                const neutralBGColour = mod.CreateVector(0, 0, 0);
+                mod.SetUITextColor(team1Text, neutralTextColour)
+                mod.SetUIWidgetBgColor(team1Text, neutralBGColour)
+                mod.SetUITextColor(team2Text, neutralTextColour)
+                mod.SetUIWidgetBgColor(team2Text, neutralBGColour)
+                mod.SetUIWidgetBgColor(team1Outline, neutralTextColour)
+                mod.SetUIWidgetBgColor(team2Outline, neutralTextColour)
             }
         }
     }
@@ -911,85 +905,104 @@ class UIController {
 
     flashCaptureProgressUI(capturePoint: mod.CapturePoint, flashAlpha: number): void {
         const cpOffset = mod.GetObjId(capturePoint) - 200;
-        if (mod.And(
-            mod.GreaterThan(
-                mod.GetCaptureProgress(capturePoint),
-                0),
-            mod.LessThan(
-                mod.GetCaptureProgress(capturePoint),
-                1))) {
-            mod.SetUITextAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset]), flashAlpha)
-            mod.SetUITextAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset + 26]), flashAlpha)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset + 52]), flashAlpha)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset + 78]), flashAlpha)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset]), flashAlpha)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset + 26]), flashAlpha)
+        const team1Text = mod.FindUIWidgetWithName(team1ObjectiveTextUI[cpOffset]);
+        const team2Text = mod.FindUIWidgetWithName(team2ObjectiveTextUI[cpOffset]);
+        const team1Outline = mod.FindUIWidgetWithName(team1ObjectiveOutlineUI[cpOffset]);
+        const team2Outline = mod.FindUIWidgetWithName(team2ObjectiveOutlineUI[cpOffset]);
+        const captureProgress = mod.GetCaptureProgress(capturePoint);
+
+        if (captureProgress > 0 && captureProgress < 1) {
+            mod.SetUITextAlpha(team1Text, flashAlpha)
+            mod.SetUITextAlpha(team2Text, flashAlpha)
+            mod.SetUIWidgetBgAlpha(team1Outline, flashAlpha)
+            mod.SetUIWidgetBgAlpha(team2Outline, flashAlpha)
+            mod.SetUIWidgetBgAlpha(team1Text, flashAlpha)
+            mod.SetUIWidgetBgAlpha(team2Text, flashAlpha)
         } else {
-            mod.SetUITextAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset]), 1)
-            mod.SetUITextAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset + 26]), 1)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset + 52]), 1)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset + 78]), 1)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset]), 0.8)
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(objectiveTrackingUI[cpOffset + 26]), 0.8)
+            mod.SetUITextAlpha(team1Text, 1)
+            mod.SetUITextAlpha(team2Text, 1)
+            mod.SetUIWidgetBgAlpha(team1Outline, 1)
+            mod.SetUIWidgetBgAlpha(team2Outline, 1)
+            mod.SetUIWidgetBgAlpha(team1Text, 0.8)
+            mod.SetUIWidgetBgAlpha(team2Text, 0.8)
         }
     }
 
     updateOOBUI(player: mod.Player, tick: number): void {
-        mod.SetUITextLabel(mod.FindUIWidgetWithName("OOBCounter", mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId)), mod.Message("{}", tick))
+        const playerRoot = mod.FindUIWidgetWithName(getPlayerState(player).uniqueUiId);
+        const counterWidget = mod.FindUIWidgetWithName("OOBCounter", playerRoot);
+        mod.SetUITextLabel(counterWidget, mod.Message("{}", tick))
     }
 
     teardownScoreUI(): void {
-        mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Timer"), mod.CreateVector(190, 60, 0))
-        mod.SetUITextSize(mod.FindUIWidgetWithName("Timer"), 48)
-        mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Timer"), mod.CreateVector(0, 390, 0))
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName("Team1LeftBar"))
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName("Team1RightBar"))
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName("Team2LeftBar"))
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName("Team2RightBar"))
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName("LeftBarBG"))
-        mod.DeleteUIWidget(mod.FindUIWidgetWithName("RightBarBG"))
-        for (let i = 0; i < objectiveTrackingUI.length; i++) {
-            mod.DeleteUIWidget(mod.FindUIWidgetWithName(objectiveTrackingUI[i]))
+        const timerWidget = mod.FindUIWidgetWithName("Timer");
+        mod.SetUIWidgetSize(timerWidget, mod.CreateVector(190, 60, 0))
+        mod.SetUITextSize(timerWidget, 48)
+        mod.SetUIWidgetPosition(timerWidget, mod.CreateVector(0, 390, 0))
+
+        const scoreWidgets = [
+            "Team1LeftBar",
+            "Team1RightBar",
+            "Team2LeftBar",
+            "Team2RightBar",
+            "LeftBarBG",
+            "RightBarBG",
+            "LeftFlash1",
+            "RightFlash1",
+            "LeftFlash2",
+            "RightFlash2",
+        ];
+        for (const widgetName of scoreWidgets) {
+            mod.DeleteUIWidget(mod.FindUIWidgetWithName(widgetName))
+        }
+        const objectiveWidgets = [
+            ...team1ObjectiveTextUI,
+            ...team2ObjectiveTextUI,
+            ...team1ObjectiveOutlineUI,
+            ...team2ObjectiveOutlineUI,
+        ];
+        for (const widgetName of objectiveWidgets) {
+            mod.DeleteUIWidget(mod.FindUIWidgetWithName(widgetName))
         }
     }
 
     setupColourFilter(): void {
-        mod.AddUIContainer("container2", mod.CreateVector(0, 0, 0), mod.CreateVector(20000, 20000, 0), mod.UIAnchor.TopCenter)
+        const containerName = "container2";
+        mod.AddUIContainer(containerName, ZERO_VECTOR, mod.CreateVector(20000, 20000, 0), mod.UIAnchor.TopCenter)
+
+        const container = mod.FindUIWidgetWithName(containerName);
+        let filterColour: mod.Vector | null = null;
         if (FLAGS.BF3_COLOUR_FILTER) {
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("container2"), mod.CreateVector(0, 0.8, 1))
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName("container2"), 0.2)
-            mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName("container2"), mod.UIBgFill.Blur)
+            filterColour = mod.CreateVector(0, 0.8, 1);
         } else if (FLAGS.BF4_COLOUR_FILTER) {
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("container2"), mod.CreateVector(1, 0.5, 0))
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName("container2"), 0.2)
-            mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName("container2"), mod.UIBgFill.Blur)
+            filterColour = mod.CreateVector(1, 0.5, 0);
         } else if (FLAGS.SNOW_COLOUR_FILTER) {
-            mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("container2"), mod.CreateVector(0, 0.4, 0.7))
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName("container2"), 0.2)
-            mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName("container2"), mod.UIBgFill.Blur)
+            filterColour = mod.CreateVector(0, 0.4, 0.7);
+        }
+
+        if (filterColour) {
+            mod.SetUIWidgetBgColor(container, filterColour)
+            mod.SetUIWidgetBgAlpha(container, 0.2)
+            mod.SetUIWidgetBgFill(container, mod.UIBgFill.Blur)
         } else {
-            mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName("container2"), mod.UIBgFill.None)
+            mod.SetUIWidgetBgFill(container, mod.UIBgFill.None)
         }
     }
 
-    async animateUIFlash(team1Widget: string, team2Widget: string): Promise<void> {
-        mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(team1Widget), 1)
-        mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(team2Widget), 1)
+    async animateUIFlash(team1WidgetName: string, team2WidgetName: string): Promise<void> {
+        const team1Widget = mod.FindUIWidgetWithName(team1WidgetName);
+        const team2Widget = mod.FindUIWidgetWithName(team2WidgetName);
+
+        mod.SetUIWidgetBgAlpha(team1Widget, 1)
+        mod.SetUIWidgetBgAlpha(team2Widget, 1)
         for (let i = 10; i < 100; i += 10) {
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(team1Widget), mod.Subtract(
-                1,
-                mod.Divide(
-                    i,
-                    100)))
-            mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(team2Widget), mod.Subtract(
-                1,
-                mod.Divide(
-                    i,
-                    100)))
+            const alpha = 1 - i / 100;
+            mod.SetUIWidgetBgAlpha(team1Widget, alpha)
+            mod.SetUIWidgetBgAlpha(team2Widget, alpha)
             await mod.Wait(0.033)
         }
-        mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(team1Widget), 0)
-        mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName(team2Widget), 0)
+        mod.SetUIWidgetBgAlpha(team1Widget, 0)
+        mod.SetUIWidgetBgAlpha(team2Widget, 0)
     }
 
     updateScoreboard(): void {
