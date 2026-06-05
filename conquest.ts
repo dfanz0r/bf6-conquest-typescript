@@ -1850,39 +1850,27 @@ class AIController {
 }
 class ConquestGame {
     shouldUpdateScoreTime(): boolean {
-        return isGameOngoing && mod.Equals(
-            mod.Modulo(
-                mod.RoundToInteger(mod.GetMatchTimeElapsed()),
-                2),
-            0);
+        return isGameOngoing && mod.RoundToInteger(mod.GetMatchTimeElapsed()) % 2 === 0;
     }
 
     shouldUpdateScoreTimeOddTick(): boolean {
-        return isGameOngoing && mod.Equals(
-            mod.Modulo(
-                mod.RoundToInteger(mod.GetMatchTimeElapsed()),
-                2),
-            1);
+        return isGameOngoing && mod.RoundToInteger(mod.GetMatchTimeElapsed()) % 2 === 1;
     }
 
     shouldTrackScore(): boolean {
-        return isGameOngoing && mod.Equals(
-            mod.Modulo(
-                mod.RoundToInteger(mod.GetMatchTimeElapsed()),
-                CONFIG.TICKET_BLEED_SPEED),
-            0);
+        return isGameOngoing && mod.RoundToInteger(mod.GetMatchTimeElapsed()) % CONFIG.TICKET_BLEED_SPEED === 0;
     }
 
     shouldPlayNearEndMusic(): boolean {
-        return isGameOngoing && (mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 60) ||
-            mod.LessThanEqualTo(getTeamState(TEAM_1).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD) ||
-            mod.LessThanEqualTo(getTeamState(TEAM_2).score, CONFIG.LOW_TICKET_MUSIC_THRESHOLD));
+        return isGameOngoing && (mod.GetMatchTimeRemaining() <= 60 ||
+            getTeamState(TEAM_1).score <= CONFIG.LOW_TICKET_MUSIC_THRESHOLD ||
+            getTeamState(TEAM_2).score <= CONFIG.LOW_TICKET_MUSIC_THRESHOLD);
     }
 
     shouldEndGame(): boolean {
-        return isGameOngoing && (mod.LessThanEqualTo(mod.GetMatchTimeRemaining(), 1) ||
-            mod.LessThanEqualTo(getTeamState(TEAM_1).score, 0) ||
-            mod.LessThanEqualTo(getTeamState(TEAM_2).score, 0));
+        return isGameOngoing && (mod.GetMatchTimeRemaining() <= 1 ||
+            getTeamState(TEAM_1).score <= 0 ||
+            getTeamState(TEAM_2).score <= 0);
     }
 
     async updateScoreTimeAndAI(): Promise<void> {
@@ -1901,84 +1889,41 @@ class ConquestGame {
     }
 
     trackScoreAndBleed(): void {
+        const capturePoints = mod.AllCapturePoints();
+        const team1 = mod.GetTeam(1);
+        const team2 = mod.GetTeam(2);
+        const team1State = getTeamState(TEAM_1);
+        const team2State = getTeamState(TEAM_2);
+        const team1OwnedCount = mod.CountOf(filterModArray(
+            capturePoints,
+            (capturePoint: any) => mod.Equals(mod.GetCurrentOwnerTeam(capturePoint), team1)));
+        const team2OwnedCount = mod.CountOf(filterModArray(
+            capturePoints,
+            (capturePoint: any) => mod.Equals(mod.GetCurrentOwnerTeam(capturePoint), team2)));
+
         if (FLAGS.TOTAL_CONTROL_TICKET_BLEED) {
-            if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
-                mod.GetCurrentOwnerTeam(currentArrayElement),
-                mod.GetTeam(1)))) {
-                getTeamState(TEAM_2).score -= CONFIG.TOTAL_CONTROL_BONUS;
-            } else if (isTrueForAll(mod.AllCapturePoints(), (currentArrayElement: any) => mod.Equals(
-                mod.GetCurrentOwnerTeam(currentArrayElement),
-                mod.GetTeam(2)))) {
-                getTeamState(TEAM_1).score -= CONFIG.TOTAL_CONTROL_BONUS;
-            } else {
+            const capturePointCount = mod.CountOf(capturePoints);
+            if (team1OwnedCount === capturePointCount) {
+                team2State.score -= CONFIG.TOTAL_CONTROL_BONUS;
+            } else if (team2OwnedCount === capturePointCount) {
+                team1State.score -= CONFIG.TOTAL_CONTROL_BONUS;
             }
         }
+
         if (FLAGS.LOSER_ONLY_TICKET_BLEED) {
-            if (mod.GreaterThan(
-                mod.CountOf(filterModArray(
-                    mod.AllCapturePoints(),
-                    (currentArrayElement: any) => mod.Equals(
-                        mod.GetCurrentOwnerTeam(currentArrayElement),
-                        mod.GetTeam(2)))),
-                mod.CountOf(filterModArray(
-                    mod.AllCapturePoints(),
-                    (currentArrayElement: any) => mod.Equals(
-                        mod.GetCurrentOwnerTeam(currentArrayElement),
-                        mod.GetTeam(1)))))) {
-                getTeamState(TEAM_1).score -=
-                    mod.Subtract(
-                        mod.CountOf(filterModArray(
-                            mod.AllCapturePoints(),
-                            (currentArrayElement: any) => mod.Equals(
-                                mod.GetCurrentOwnerTeam(currentArrayElement),
-                                mod.GetTeam(2)))),
-                        mod.CountOf(filterModArray(
-                            mod.AllCapturePoints(),
-                            (currentArrayElement: any) => mod.Equals(
-                                mod.GetCurrentOwnerTeam(currentArrayElement),
-                                mod.GetTeam(1)))));
+            if (team2OwnedCount > team1OwnedCount) {
+                team1State.score -= team2OwnedCount - team1OwnedCount;
                 uiController.updateScoreboard()
                 uiController.animateUIFlash("LeftFlash1", "RightFlash2")
             }
-            if (mod.GreaterThan(
-                mod.CountOf(filterModArray(
-                    mod.AllCapturePoints(),
-                    (currentArrayElement: any) => mod.Equals(
-                        mod.GetCurrentOwnerTeam(currentArrayElement),
-                        mod.GetTeam(1)))),
-                mod.CountOf(filterModArray(
-                    mod.AllCapturePoints(),
-                    (currentArrayElement: any) => mod.Equals(
-                        mod.GetCurrentOwnerTeam(currentArrayElement),
-                        mod.GetTeam(2)))))) {
-                getTeamState(TEAM_2).score -=
-                    mod.Subtract(
-                        mod.CountOf(filterModArray(
-                            mod.AllCapturePoints(),
-                            (currentArrayElement: any) => mod.Equals(
-                                mod.GetCurrentOwnerTeam(currentArrayElement),
-                                mod.GetTeam(1)))),
-                        mod.CountOf(filterModArray(
-                            mod.AllCapturePoints(),
-                            (currentArrayElement: any) => mod.Equals(
-                                mod.GetCurrentOwnerTeam(currentArrayElement),
-                                mod.GetTeam(2)))));
+            if (team1OwnedCount > team2OwnedCount) {
+                team2State.score -= team1OwnedCount - team2OwnedCount;
                 uiController.updateScoreboard()
                 uiController.animateUIFlash("RightFlash1", "LeftFlash2")
             }
         } else {
-            getTeamState(TEAM_1).score -=
-                mod.CountOf(filterModArray(
-                    mod.AllCapturePoints(),
-                    (currentArrayElement: any) => mod.Equals(
-                        mod.GetCurrentOwnerTeam(currentArrayElement),
-                        mod.GetTeam(2))));
-            getTeamState(TEAM_2).score -=
-                mod.CountOf(filterModArray(
-                    mod.AllCapturePoints(),
-                    (currentArrayElement: any) => mod.Equals(
-                        mod.GetCurrentOwnerTeam(currentArrayElement),
-                        mod.GetTeam(1))));
+            team1State.score -= team2OwnedCount;
+            team2State.score -= team1OwnedCount;
         }
     }
 
