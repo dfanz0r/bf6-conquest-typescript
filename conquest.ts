@@ -1047,34 +1047,43 @@ class UIController {
 }
 class PlayerController {
     shouldProcessKill(eventInfo: PlayerCombatEventInfo): boolean {
-        return mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer));
+        return !sameTeam(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer));
     }
 
     processKill(eventInfo: PlayerCombatEventInfo): void {
-        getPlayerState(eventInfo.eventPlayer).score += 10;
-        getPlayerState(eventInfo.eventPlayer).score += 10;
-        getPlayerState(eventInfo.eventPlayer).kills += 1;
-        uiController.updatePlayerScoreboard(eventInfo.eventPlayer)
+        const player = eventInfo.eventPlayer;
+        const playerState = getPlayerState(player);
+
+        playerState.score += 20;
+        playerState.kills += 1;
+        uiController.updatePlayerScoreboard(player)
     }
 
     shouldProcessAssist(eventInfo: PlayerCombatEventInfo): boolean {
-        return mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer));
+        return !sameTeam(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer));
     }
 
     processAssist(eventInfo: PlayerCombatEventInfo): void {
-        getPlayerState(eventInfo.eventPlayer).score += 5;
-        getPlayerState(eventInfo.eventPlayer).assists += 1;
-        uiController.updatePlayerScoreboard(eventInfo.eventPlayer)
+        const player = eventInfo.eventPlayer;
+        const playerState = getPlayerState(player);
+
+        playerState.score += 5;
+        playerState.assists += 1;
+        uiController.updatePlayerScoreboard(player)
     }
 
     processRevive(eventInfo: PlayerCombatEventInfo): void {
-        getPlayerState(eventInfo.eventOtherPlayer).score += 10;
-        getPlayerState(eventInfo.eventOtherPlayer).revives += 1;
-        uiController.updatePlayerScoreboard(eventInfo.eventOtherPlayer)
+        const revivedPlayer = eventInfo.eventOtherPlayer;
+        const revivedPlayerState = getPlayerState(revivedPlayer);
+
+        revivedPlayerState.score += 10;
+        revivedPlayerState.revives += 1;
+        uiController.updatePlayerScoreboard(revivedPlayer)
     }
 
     onUndeploy(eventInfo: PlayerEventInfo): void {
-        const playerState = getPlayerState(eventInfo.eventPlayer);
+        const player = eventInfo.eventPlayer;
+        const playerState = getPlayerState(player);
         const teamState = tryGetTeamState(playerState.team);
 
         if (FLAGS.PLAYER_DEATHS_BLEED && teamState) {
@@ -1082,86 +1091,34 @@ class PlayerController {
         }
         playerState.deaths += 1;
         playerState.captureSessionActive = false;
-        uiController.updatePlayerScoreboard(eventInfo.eventPlayer)
+        uiController.updatePlayerScoreboard(player)
         uiController.updateScoreboard()
     }
 
-    shouldUndeploy(eventInfo: PlayerEventInfo): boolean {
+    shouldUndeploy(_eventInfo: PlayerEventInfo): boolean {
         return isGameOngoing;
     }
 
     shouldEnterAreaTrigger(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }): boolean {
-        return mod.Or(
-            mod.Or(
-                mod.And(
-                    mod.And(
-                        mod.GreaterThanEqualTo(
-                            mod.GetObjId(eventInfo.eventAreaTrigger),
-                            1100),
-                        mod.LessThan(
-                            mod.GetObjId(eventInfo.eventAreaTrigger),
-                            1200)),
-                    mod.Equals(
-                        mod.GetTeam(eventInfo.eventPlayer),
-                        mod.GetTeam(2))),
-                mod.And(
-                    mod.And(
-                        mod.GreaterThanEqualTo(
-                            mod.GetObjId(eventInfo.eventAreaTrigger),
-                            1200),
-                        mod.LessThan(
-                            mod.GetObjId(eventInfo.eventAreaTrigger),
-                            1300)),
-                    mod.Equals(
-                        mod.GetTeam(eventInfo.eventPlayer),
-                        mod.GetTeam(1)))),
-            mod.And(
-                mod.GreaterThanEqualTo(
-                    mod.GetObjId(eventInfo.eventAreaTrigger),
-                    1300),
-                mod.LessThan(
-                    mod.GetObjId(eventInfo.eventAreaTrigger),
-                    1400)));
+        return this.isOutOfBoundsAreaTrigger(eventInfo.eventAreaTrigger, mod.GetTeam(eventInfo.eventPlayer));
     }
 
     shouldExitAreaTrigger(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }): boolean {
-        return mod.Or(
-            mod.Or(
-                mod.Or(
-                    mod.And(
-                        mod.And(
-                            mod.GreaterThanEqualTo(
-                                mod.GetObjId(eventInfo.eventAreaTrigger),
-                                1100),
-                            mod.LessThan(
-                                mod.GetObjId(eventInfo.eventAreaTrigger),
-                                1200)),
-                        mod.Equals(
-                            mod.GetTeam(eventInfo.eventPlayer),
-                            mod.GetTeam(2))),
-                    mod.And(
-                        mod.And(
-                            mod.GreaterThanEqualTo(
-                                mod.GetObjId(eventInfo.eventAreaTrigger),
-                                1200),
-                            mod.LessThan(
-                                mod.GetObjId(eventInfo.eventAreaTrigger),
-                                1300)),
-                        mod.Equals(
-                            mod.GetTeam(eventInfo.eventPlayer),
-                            mod.GetTeam(1)))),
-                mod.And(
-                    mod.GreaterThanEqualTo(
-                        mod.GetObjId(eventInfo.eventAreaTrigger),
-                        1300),
-                    mod.LessThan(
-                        mod.GetObjId(eventInfo.eventAreaTrigger),
-                        1400))),
-            mod.Not(mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive)));
+        return this.isOutOfBoundsAreaTrigger(eventInfo.eventAreaTrigger, mod.GetTeam(eventInfo.eventPlayer)) ||
+            !mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive);
+    }
+
+    private isOutOfBoundsAreaTrigger(areaTrigger: mod.AreaTrigger, playerTeam: mod.Team): boolean {
+        const triggerId = mod.GetObjId(areaTrigger);
+        const isTeam2RestrictedArea = triggerId >= 1100 && triggerId < 1200 && mod.Equals(playerTeam, mod.GetTeam(2));
+        const isTeam1RestrictedArea = triggerId >= 1200 && triggerId < 1300 && mod.Equals(playerTeam, mod.GetTeam(1));
+        const isSharedRestrictedArea = triggerId >= 1300 && triggerId < 1400;
+
+        return isTeam2RestrictedArea || isTeam1RestrictedArea || isSharedRestrictedArea;
     }
 
     enterAreaTrigger(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }): void {
-        if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
+        if (!getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
             this.handleOutOfBounds(eventInfo)
         }
     }
@@ -1171,109 +1128,108 @@ class PlayerController {
     }
 
     async applyRepelForce(time: number, eventInfo: { eventPlayer: mod.Player; eventInteractPoint: mod.InteractPoint }): Promise<void> {
-        if (mod.GreaterThan(
-            mod.YComponentOf(mod.GetObjectPosition(mod.GetSpatialObject(mod.Add(
-                mod.GetObjId(eventInfo.eventInteractPoint),
-                50)))),
-            mod.YComponentOf(mod.GetObjectPosition(eventInfo.eventPlayer)))) {
-            mod.SetObjectTransformOverTime(eventInfo.eventPlayer, mod.CreateTransform(mod.Add(
-                mod.CreateVector(mod.XComponentOf(mod.GetObjectPosition(eventInfo.eventPlayer)), mod.YComponentOf(mod.GetObjectPosition(mod.GetSpatialObject(mod.Add(
-                    mod.GetObjId(eventInfo.eventInteractPoint),
-                    50)))), mod.ZComponentOf(mod.GetObjectPosition(eventInfo.eventPlayer))),
-                mod.UpVector()), mod.CreateVector(0, mod.YComponentOf(mod.GetObjectRotation(eventInfo.eventPlayer)), 0)), time, false, false)
+        const player = eventInfo.eventPlayer;
+        const repelObject = mod.GetSpatialObject(mod.GetObjId(eventInfo.eventInteractPoint) + 50);
+        if (!repelObject) return;
+
+        const playerPosition = mod.GetObjectPosition(player);
+        const repelPosition = mod.GetObjectPosition(repelObject);
+        const playerRotationY = mod.YComponentOf(mod.GetObjectRotation(player));
+        const targetRotation = mod.CreateVector(0, playerRotationY, 0);
+
+        if (mod.YComponentOf(repelPosition) > mod.YComponentOf(playerPosition)) {
+            const targetPosition = mod.Add(
+                mod.CreateVector(
+                    mod.XComponentOf(playerPosition),
+                    mod.YComponentOf(repelPosition),
+                    mod.ZComponentOf(playerPosition)),
+                mod.UpVector());
+            mod.SetObjectTransformOverTime(player, mod.CreateTransform(targetPosition, targetRotation), time, false, false)
         } else {
-            mod.Teleport(eventInfo.eventPlayer, mod.CreateVector(mod.XComponentOf(mod.GetObjectPosition(mod.GetSpatialObject(mod.Add(
-                mod.GetObjId(eventInfo.eventInteractPoint),
-                50)))), mod.YComponentOf(mod.GetObjectPosition(eventInfo.eventPlayer)), mod.ZComponentOf(mod.GetObjectPosition(mod.GetSpatialObject(mod.Add(
-                    mod.GetObjId(eventInfo.eventInteractPoint),
-                    50))))), mod.YComponentOf(mod.GetObjectRotation(eventInfo.eventPlayer)))
+            const targetPosition = mod.CreateVector(
+                mod.XComponentOf(repelPosition),
+                mod.YComponentOf(playerPosition),
+                mod.ZComponentOf(repelPosition));
+            mod.Teleport(player, targetPosition, playerRotationY)
             await mod.Wait(0.1)
-            mod.SetObjectTransformOverTime(eventInfo.eventPlayer, mod.CreateTransform(mod.Add(
-                mod.GetObjectPosition(mod.GetSpatialObject(mod.Add(
-                    mod.GetObjId(eventInfo.eventInteractPoint),
-                    50))),
-                mod.Multiply(mod.UpVector(), 3)), mod.CreateVector(0, mod.YComponentOf(mod.GetObjectRotation(eventInfo.eventPlayer)), 0)), time, false, false)
+            const finalPosition = mod.Add(repelPosition, mod.Multiply(mod.UpVector(), 3));
+            const finalTransform = mod.CreateTransform(finalPosition, targetRotation);
+            mod.SetObjectTransformOverTime(player, finalTransform, time, false, false)
         }
-        await mod.Wait(mod.Add(
-            time,
-            0.1))
-        mod.Teleport(eventInfo.eventPlayer, mod.GetObjectPosition(mod.GetSpatialObject(mod.Add(
-            mod.GetObjId(eventInfo.eventInteractPoint),
-            50))), mod.YComponentOf(mod.GetObjectRotation(eventInfo.eventPlayer)))
+        await mod.Wait(time + 0.1)
+        mod.Teleport(player, repelPosition, playerRotationY)
     }
 
     async handleTeamSwitchAndRepel(eventInfo: { eventPlayer: mod.Player; eventInteractPoint: mod.InteractPoint }): Promise<void> {
-        if (FLAGS.ENABLE_TEAM_SWITCHING) {
-            if (mod.Or(
-                mod.Equals(
-                    mod.GetInteractPoint(998),
-                    eventInfo.eventInteractPoint),
-                mod.Equals(
-                    mod.GetInteractPoint(999),
-                    eventInfo.eventInteractPoint))) {
-                getPlayerState(eventInfo.eventPlayer).ignoreOOB = true;
-                mod.UndeployPlayer(eventInfo.eventPlayer)
-                mod.SetTeam(eventInfo.eventPlayer, getTeamState(mod.GetTeam(eventInfo.eventPlayer)).otherTeam)
-                getTeamState(mod.GetTeam(eventInfo.eventPlayer)).score += 1;
-                getPlayerState(eventInfo.eventPlayer).deaths -= 1;
-                uiController.updatePlayerScoreboard(eventInfo.eventPlayer)
-                await mod.Wait(2)
-                getPlayerState(eventInfo.eventPlayer).ignoreOOB = false;
-            }
+        const player = eventInfo.eventPlayer;
+        const interactPoint = eventInfo.eventInteractPoint;
+        const interactPointId = mod.GetObjId(interactPoint);
+        const playerState = getPlayerState(player);
+
+        if (FLAGS.ENABLE_TEAM_SWITCHING &&
+            (mod.Equals(mod.GetInteractPoint(998), interactPoint) || mod.Equals(mod.GetInteractPoint(999), interactPoint))) {
+            const oldTeamState = getTeamState(playerState.team);
+            playerState.ignoreOOB = true;
+            mod.UndeployPlayer(player)
+            mod.SetTeam(player, oldTeamState.otherTeam)
+            updatePlayerTeam(player);
+            getTeamState(playerState.team).score += 1;
+            playerState.deaths -= 1;
+            uiController.updatePlayerScoreboard(player)
+            await mod.Wait(2)
+            playerState.ignoreOOB = false;
         }
-        if (mod.And(
-            mod.GreaterThanEqualTo(
-                mod.GetObjId(eventInfo.eventInteractPoint),
-                700),
-            mod.LessThan(
-                mod.GetObjId(eventInfo.eventInteractPoint),
-                750))) {
-            await this.applyRepelForce(mod.Divide(
-                mod.DistanceBetween(
-                    mod.GetObjectPosition(eventInfo.eventPlayer),
-                    mod.GetObjectPosition(mod.GetSpatialObject(mod.Add(
-                        mod.GetObjId(eventInfo.eventInteractPoint),
-                        50)))),
-                8), eventInfo)
+
+        if (interactPointId >= 700 && interactPointId < 750) {
+            const repelOrigin = mod.GetSpatialObject(interactPointId + 50);
+            const repelForce = mod.DistanceBetween(
+                mod.GetObjectPosition(player),
+                mod.GetObjectPosition(repelOrigin)) / 8;
+            await this.applyRepelForce(repelForce, eventInfo)
         }
     }
 
     async handleOutOfBounds(eventInfo: PlayerEventInfo): Promise<void> {
-        if (!getPlayerState(eventInfo.eventPlayer).ignoreOOB && !getPlayerState(eventInfo.eventPlayer).isOutOfBounds && mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAlive)) {
-            getPlayerState(eventInfo.eventPlayer).isOutOfBounds = true;
-            mod.SkipManDown(eventInfo.eventPlayer, true)
-            if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier)) {
-                for (let countdown = 10; countdown >= 0; countdown -= 1) {
-                    getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown = countdown;
-                    await waitUntil(1, () => !getPlayerState(eventInfo.eventPlayer).isOutOfBounds)
-                    if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
-                        break
-                    }
+        const player = eventInfo.eventPlayer;
+        const playerState = getPlayerState(player);
+
+        if (playerState.ignoreOOB ||
+            playerState.isOutOfBounds ||
+            !mod.GetSoldierState(player, mod.SoldierStateBool.IsAlive)) return;
+
+        playerState.isOutOfBounds = true;
+        mod.SkipManDown(player, true)
+
+        if (mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier)) {
+            for (let countdown = 10; countdown >= 0; countdown -= 1) {
+                playerState.outOfBoundsCountdown = countdown;
+                await waitUntil(1, () => !playerState.isOutOfBounds)
+                if (!playerState.isOutOfBounds) {
+                    break
                 }
-                if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
-                    if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
-                        mod.DealDamage(eventInfo.eventPlayer, 10000, eventInfo.eventPlayer)
-                    }
-                }
-                getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown = -1;
-            } else {
-                uiController.togglePlayerOOBUI(true, eventInfo)
-                for (let countdown = 10; countdown >= 0; countdown -= 1) {
-                    getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown = countdown;
-                    uiController.updateOOBUI(eventInfo.eventPlayer, getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown)
-                    mod.PlaySound(audio.oobSound!, 0.7, eventInfo.eventPlayer)
-                    await waitUntil(1, () => !getPlayerState(eventInfo.eventPlayer).isOutOfBounds)
-                    if (mod.Not(getPlayerState(eventInfo.eventPlayer).isOutOfBounds)) {
-                        break
-                    }
-                }
-                if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
-                    mod.DealDamage(eventInfo.eventPlayer, 10000, eventInfo.eventPlayer)
-                }
-                uiController.togglePlayerOOBUI(false, eventInfo)
-                getPlayerState(eventInfo.eventPlayer).outOfBoundsCountdown = -1;
+            }
+            if (playerState.isOutOfBounds && mod.IsPlayerValid(player)) {
+                mod.DealDamage(player, 10000, player)
+            }
+            playerState.outOfBoundsCountdown = -1;
+            return;
+        }
+
+        uiController.togglePlayerOOBUI(true, eventInfo)
+        for (let countdown = 10; countdown >= 0; countdown -= 1) {
+            playerState.outOfBoundsCountdown = countdown;
+            uiController.updateOOBUI(player, playerState.outOfBoundsCountdown)
+            mod.PlaySound(audio.oobSound!, 0.7, player)
+            await waitUntil(1, () => !playerState.isOutOfBounds)
+            if (!playerState.isOutOfBounds) {
+                break
             }
         }
+        if (playerState.isOutOfBounds && mod.IsPlayerValid(player)) {
+            mod.DealDamage(player, 10000, player)
+        }
+        uiController.togglePlayerOOBUI(false, eventInfo)
+        playerState.outOfBoundsCountdown = -1;
     }
 
     addEquipment(player: mod.Player): void {
@@ -1292,16 +1248,17 @@ class PlayerController {
     async onJoin(player: mod.Player): Promise<void> {
         initPlayerState(player);
         await mod.Wait(1)
-        if (mod.IsPlayerValid(player)) {
-            uiController.updatePlayerScoreboard(player)
-            if (mod.Not(mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier))) {
-                uiController.setupPlayerUI(player)
-                await mod.Wait(5)
-                if (isGameOngoing) {
-                    await mod.Wait(0.1)
-                    conquestGame.resetFX({ eventPlayer: player })
-                }
-            }
+
+        if (!mod.IsPlayerValid(player)) return;
+
+        uiController.updatePlayerScoreboard(player)
+        if (mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier)) return;
+
+        uiController.setupPlayerUI(player)
+        await mod.Wait(5)
+        if (isGameOngoing) {
+            await mod.Wait(0.1)
+            conquestGame.resetFX({ eventPlayer: player })
         }
     }
 
@@ -1310,35 +1267,34 @@ class PlayerController {
     }
 
     async handleDeath(eventInfo: PlayerCombatEventInfo): Promise<void> {
+        const player = eventInfo.eventPlayer;
+
         await mod.Wait(0.1)
-        if (getPlayerState(eventInfo.eventPlayer).isOutOfBounds) {
+        const playerState = getPlayerState(player);
+        if (playerState.isOutOfBounds) {
             this.disableOutOfBounds(eventInfo)
         }
-        if (FLAGS.ENABLE_CUSTOM_AI) {
-            if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
-                if (mod.GetSoldierState(eventInfo.eventPlayer, mod.SoldierStateBool.IsAISoldier)) {
-                    if (mod.And(
-                        FLAGS.PLAYER_DEATHS_BLEED,
-                        mod.NotEqualTo(eventInfo.eventPlayer, eventInfo.eventOtherPlayer))) {
-                        getTeamState(mod.GetTeam(eventInfo.eventPlayer)).score -= 1;
-                    }
-                    getPlayerState(eventInfo.eventPlayer).deaths += 1;
-                    uiController.updatePlayerScoreboard(eventInfo.eventPlayer)
-                    if (mod.GreaterThan(
-                        mod.DistanceBetween(
-                            mod.GetObjectPosition(eventInfo.eventPlayer),
-                            mod.GetObjectPosition(mod.ClosestPlayerTo(mod.GetObjectPosition(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventPlayer)))),
-                        20)) {
-                        await mod.Wait(3)
-                        if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
-                            mod.UndeployPlayer(eventInfo.eventPlayer)
-                        }
-                    }
-                }
+        if (!FLAGS.ENABLE_CUSTOM_AI ||
+            !mod.IsPlayerValid(player) ||
+            !mod.GetSoldierState(player, mod.SoldierStateBool.IsAISoldier)) return;
+
+        if (FLAGS.PLAYER_DEATHS_BLEED && mod.NotEqualTo(player, eventInfo.eventOtherPlayer)) {
+            getTeamState(playerState.team).score -= 1;
+        }
+        playerState.deaths += 1;
+        uiController.updatePlayerScoreboard(player)
+
+        const playerPosition = mod.GetObjectPosition(player);
+        const closestTeammate = mod.ClosestPlayerTo(playerPosition, playerState.team);
+        if (closestTeammate && mod.DistanceBetween(playerPosition, mod.GetObjectPosition(closestTeammate)) > 20) {
+            await mod.Wait(3)
+            if (mod.IsPlayerValid(player)) {
+                mod.UndeployPlayer(player)
             }
         }
     }
 }
+
 class CapturePointController {
     setupCapturePoint(cp: mod.CapturePoint): void {
         mod.SetCapturePointCapturingTime(cp, CONFIG.FLAG_CAPTURE_TIME)
