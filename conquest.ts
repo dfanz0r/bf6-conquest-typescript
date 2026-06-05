@@ -33,6 +33,12 @@ const FLAGS = {
 
 const ZERO_VECTOR = mod.CreateVector(0, 0, 0);
 
+const SCORE_MESSAGE = mod.Message("Score");
+const KILLS_MESSAGE = mod.Message("Kills");
+const DEATHS_MESSAGE = mod.Message("Deaths");
+const ASSISTS_MESSAGE = mod.Message("Assists");
+const CAPTURES_MESSAGE = mod.Message("Captures");
+
 // EVENT INFO TYPES
 type PlayerEventInfo = { eventPlayer: mod.Player };
 type PlayerCombatEventInfo = {
@@ -987,64 +993,46 @@ class UIController {
     }
 
     updateScoreboard(): void {
+        // Current team state used for scoreboard text and ticket-bar ratios.
+        const team1State = getTeamState(TEAM_1);
+        const team2State = getTeamState(TEAM_2);
+
+        // Ticket bars are 200px wide at full starting score.
+        const team1BarWidth = Math.floor(200 * (team1State.score / team1State.startingScore));
+        const team2BarWidth = Math.floor(200 * (team2State.score / team2State.startingScore));
+
+        // Left bars grow right from -260; right bars grow left from 260.
+        const team1LeftBarX = Math.floor(-260 + team1BarWidth / 2);
+        const team1RightBarX = Math.floor(260 - team2BarWidth / 2);
+        const team2LeftBarX = Math.floor(-260 + team2BarWidth / 2);
+        const team2RightBarX = Math.floor(260 - team1BarWidth / 2);
+
+        // Timer uses split digits to preserve the original "M : SS" formatting.
+        const timeRemaining = mod.GetMatchTimeRemaining();
+        const minutes = Math.floor(timeRemaining / 60);
+        const secondsTens = Math.floor((timeRemaining % 60) / 10);
+        const secondsOnes = Math.floor(timeRemaining % 10);
+
         mod.SetScoreboardType(mod.ScoreboardType.CustomTwoTeams)
-        mod.SetScoreboardColumnNames(mod.Message("Score"), mod.Message("Kills"), mod.Message("Deaths"), mod.Message("Assists"), mod.Message("Captures"))
-        mod.SetScoreboardHeader(mod.Message("{}: {}", getTeamState(TEAM_1).faction, getTeamState(TEAM_1).score), mod.Message("{}: {}", getTeamState(TEAM_2).faction, getTeamState(TEAM_2).score))
-        mod.SetUITextLabel(mod.FindUIWidgetWithName("Team1ScoreLeft"), mod.Message("{}", getTeamState(TEAM_1).score))
-        mod.SetUITextLabel(mod.FindUIWidgetWithName("Team1ScoreRight"), mod.Message("{}", getTeamState(TEAM_2).score))
-        mod.SetUITextLabel(mod.FindUIWidgetWithName("Team2ScoreLeft"), mod.Message("{}", getTeamState(TEAM_2).score))
-        mod.SetUITextLabel(mod.FindUIWidgetWithName("Team2ScoreRight"), mod.Message("{}", getTeamState(TEAM_1).score))
-        mod.SetUITextLabel(mod.FindUIWidgetWithName("Timer"), mod.Message("{} : {}{}", mod.Floor(mod.Divide(
-            mod.GetMatchTimeRemaining(),
-            60)), mod.Floor(mod.Divide(
-                mod.Modulo(
-                    mod.GetMatchTimeRemaining(),
-                    60),
-                10)), mod.Floor(mod.Modulo(
-                    mod.GetMatchTimeRemaining(),
-                    10))))
-        mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team1LeftBar"), mod.CreateVector(mod.Floor(mod.Multiply(200, mod.Divide(
-            getTeamState(TEAM_1).score,
-            getTeamState(TEAM_1).startingScore))), 10, 0))
-        mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team2LeftBar"), mod.CreateVector(mod.Floor(mod.Multiply(200, mod.Divide(
-            getTeamState(TEAM_2).score,
-            getTeamState(TEAM_2).startingScore))), 10, 0))
-        mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team1RightBar"), mod.CreateVector(mod.Floor(mod.Multiply(200, mod.Divide(
-            getTeamState(TEAM_2).score,
-            getTeamState(TEAM_2).startingScore))), 10, 0))
-        mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team2RightBar"), mod.CreateVector(mod.Floor(mod.Multiply(200, mod.Divide(
-            getTeamState(TEAM_1).score,
-            getTeamState(TEAM_1).startingScore))), 10, 0))
-        mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team1LeftBar"), mod.CreateVector(mod.Floor(mod.Add(
-            -260,
-            mod.Divide(
-                mod.Multiply(200, mod.Divide(
-                    getTeamState(TEAM_1).score,
-                    getTeamState(TEAM_1).startingScore)),
-                2))), 60, 0))
-        mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team1RightBar"), mod.CreateVector(mod.Floor(mod.Subtract(
-            260,
-            mod.Divide(
-                mod.Multiply(200, mod.Divide(
-                    getTeamState(TEAM_2).score,
-                    getTeamState(TEAM_2).startingScore)),
-                2))), 60, 0))
-        mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team2LeftBar"), mod.CreateVector(mod.Floor(mod.Add(
-            -260,
-            mod.Divide(
-                mod.Multiply(200, mod.Divide(
-                    getTeamState(TEAM_2).score,
-                    getTeamState(TEAM_2).startingScore)),
-                2))), 60, 0))
-        mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team2RightBar"), mod.CreateVector(mod.Floor(mod.Subtract(
-            260,
-            mod.Divide(
-                mod.Multiply(200, mod.Divide(
-                    getTeamState(TEAM_1).score,
-                    getTeamState(TEAM_1).startingScore)),
-                2))), 60, 0))
+        mod.SetScoreboardColumnNames(SCORE_MESSAGE, KILLS_MESSAGE, DEATHS_MESSAGE, ASSISTS_MESSAGE, CAPTURES_MESSAGE)
+        mod.SetScoreboardHeader(mod.Message("{}: {}", team1State.faction, team1State.score), mod.Message("{}: {}", team2State.faction, team2State.score))
+        mod.SetUITextLabel(mod.FindUIWidgetWithName("Team1ScoreLeft"), mod.Message("{}", team1State.score))
+        mod.SetUITextLabel(mod.FindUIWidgetWithName("Team1ScoreRight"), mod.Message("{}", team2State.score))
+        mod.SetUITextLabel(mod.FindUIWidgetWithName("Team2ScoreLeft"), mod.Message("{}", team2State.score))
+        mod.SetUITextLabel(mod.FindUIWidgetWithName("Team2ScoreRight"), mod.Message("{}", team1State.score))
+        mod.SetUITextLabel(mod.FindUIWidgetWithName("Timer"), mod.Message("{} : {}{}", minutes, secondsTens, secondsOnes))
+
+        mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team1LeftBar"), mod.CreateVector(team1BarWidth, 10, 0))
+        mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team2LeftBar"), mod.CreateVector(team2BarWidth, 10, 0))
+        mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team1RightBar"), mod.CreateVector(team2BarWidth, 10, 0))
+        mod.SetUIWidgetSize(mod.FindUIWidgetWithName("Team2RightBar"), mod.CreateVector(team1BarWidth, 10, 0))
+        mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team1LeftBar"), mod.CreateVector(team1LeftBarX, 60, 0))
+        mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team1RightBar"), mod.CreateVector(team1RightBarX, 60, 0))
+        mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team2LeftBar"), mod.CreateVector(team2LeftBarX, 60, 0))
+        mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team2RightBar"), mod.CreateVector(team2RightBarX, 60, 0))
     }
 }
+
 class PlayerController {
     shouldProcessKill(eventInfo: PlayerCombatEventInfo): boolean {
         return !sameTeam(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer));
