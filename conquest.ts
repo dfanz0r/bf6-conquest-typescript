@@ -209,7 +209,6 @@ class PlayerState {
 
     aiTarget: mod.Player | mod.CapturePoint | null = null;
     aiInAction = false;
-    aiSpawnPoints: mod.Array = undefined!;
     startPosition: mod.Vector | null = null;
 
     conditions = new Conditions(PlayerConditionSlot.Count);
@@ -254,20 +253,90 @@ class TeamState {
     }
 }
 
-// Capture Point State
+// Objective State
 
-class CapturePointState {
-    id: number;
+class Objective {
+    private capturePoint: mod.CapturePoint | null = null;
+    private team1VehicleSpawner: mod.VehicleSpawner | null = null;
+    private team2VehicleSpawner: mod.VehicleSpawner | null = null;
+
     progress = 0;
-    uiSize: mod.Vector;
-    uiPosition: mod.Vector;
-    conditions: Conditions;
+    uiSize = mod.CreateVector(0, 7, 0);
+    uiPosition = mod.CreateVector(-110, 200, 0);
+    conditions = new Conditions(CapturePointConditionSlot.Count);
 
-    constructor(public capturePoint: mod.CapturePoint) {
-        this.id = mod.GetObjId(capturePoint);
-        this.uiSize = mod.CreateVector(0, 7, 0);
-        this.uiPosition = mod.CreateVector(-110, 200, 0);
-        this.conditions = new Conditions(CapturePointConditionSlot.Count);
+    constructor(
+        public readonly index: number,
+        public readonly id: number,
+        private readonly team1VehicleSpawnerId: number | null,
+        private readonly team2VehicleSpawnerId: number | null,
+    ) {}
+
+    get letter(): string {
+        return flagLetters[this.index];
+    }
+
+    get voiceFlag(): mod.VoiceOverFlags | null {
+        return flagAnnounce[this.index] ?? null;
+    }
+
+    get team1TextUI(): string {
+        return team1ObjectiveTextUI[this.index];
+    }
+
+    get team2TextUI(): string {
+        return team2ObjectiveTextUI[this.index];
+    }
+
+    get team1OutlineUI(): string {
+        return team1ObjectiveOutlineUI[this.index];
+    }
+
+    get team2OutlineUI(): string {
+        return team2ObjectiveOutlineUI[this.index];
+    }
+
+    setCapturePoint(capturePoint: mod.CapturePoint): void {
+        this.capturePoint = capturePoint;
+    }
+
+    getCapturePoint(): mod.CapturePoint {
+        if (!isDefined(this.capturePoint)) {
+            this.capturePoint = mod.GetCapturePoint(this.id);
+        }
+        return this.capturePoint;
+    }
+
+    hasVehicleSpawners(): boolean {
+        return this.team1VehicleSpawnerId !== null && this.team2VehicleSpawnerId !== null;
+    }
+
+    getTeam1VehicleSpawner(): mod.VehicleSpawner | null {
+        if (this.team1VehicleSpawnerId === null) return null;
+        if (!isDefined(this.team1VehicleSpawner)) {
+            this.team1VehicleSpawner = mod.GetVehicleSpawner(this.team1VehicleSpawnerId);
+        }
+        return this.team1VehicleSpawner;
+    }
+
+    getTeam2VehicleSpawner(): mod.VehicleSpawner | null {
+        if (this.team2VehicleSpawnerId === null) return null;
+        if (!isDefined(this.team2VehicleSpawner)) {
+            this.team2VehicleSpawner = mod.GetVehicleSpawner(this.team2VehicleSpawnerId);
+        }
+        return this.team2VehicleSpawner;
+    }
+
+    getVehicleSpawnerForTeam(team: mod.Team): mod.VehicleSpawner | null {
+        if (sameTeam(team, TEAM_1)) return this.getTeam1VehicleSpawner();
+        if (sameTeam(team, TEAM_2)) return this.getTeam2VehicleSpawner();
+        return null;
+    }
+
+    getOtherVehicleSpawnerForTeam(team: mod.Team): mod.VehicleSpawner | null {
+        if (sameTeam(team, TEAM_1)) return this.getTeam2VehicleSpawner();
+        if (sameTeam(team, TEAM_2)) return this.getTeam1VehicleSpawner();
+        return null;
     }
 
     setProgressVisuals(progress: number): void {
@@ -285,7 +354,77 @@ class CapturePointState {
 
 const playerStates = new Map<number, PlayerState>();
 const teamStates = new Map<number, TeamState>();
-const capturePointStates = new Map<number, CapturePointState>();
+const OBJECTIVE_ID_BASE = 200;
+const objectives: Array<Objective | null> = [
+    new Objective(0, 200, 600, 601),
+    new Objective(1, 201, 610, 611),
+    new Objective(2, 202, 620, 621),
+    new Objective(3, 203, 630, 631),
+    new Objective(4, 204, 640, 641),
+    new Objective(5, 205, null, null),
+    new Objective(6, 206, null, null),
+    new Objective(7, 207, null, null),
+    new Objective(8, 208, null, null),
+    new Objective(9, 209, null, null),
+    new Objective(10, 210, null, null),
+    new Objective(11, 211, null, null),
+    new Objective(12, 212, null, null),
+    new Objective(13, 213, null, null),
+    new Objective(14, 214, null, null),
+    new Objective(15, 215, null, null),
+    new Objective(16, 216, null, null),
+    new Objective(17, 217, null, null),
+    new Objective(18, 218, null, null),
+    new Objective(19, 219, null, null),
+    new Objective(20, 220, null, null),
+    new Objective(21, 221, null, null),
+    new Objective(22, 222, null, null),
+    new Objective(23, 223, null, null),
+    new Objective(24, 224, null, null),
+    new Objective(25, 225, null, null),
+];
+let activeObjectiveCount = 0;
+
+function getObjectiveById(objectiveId: number): Objective | null {
+    const objectiveOffset = objectiveId - OBJECTIVE_ID_BASE;
+    if (objectiveOffset < 0 || objectiveOffset >= objectives.length) return null;
+    return objectives[objectiveOffset];
+}
+
+function getObjectiveByCapturePoint(capturePoint: mod.CapturePoint): Objective | null {
+    return getObjectiveById(mod.GetObjId(capturePoint));
+}
+
+function getFirstObjective(): Objective | null {
+    for (const objective of objectives) {
+        if (objective) return objective;
+    }
+    return null;
+}
+
+function initObjectiveRegistry(allCapturePoints: mod.Array): void {
+    const activeOffsets = new Set<number>();
+
+    for (let i = 0; i < mod.CountOf(allCapturePoints); i++) {
+        const capturePoint = mod.ValueInArray(allCapturePoints, i) as mod.CapturePoint;
+        const objectiveId = mod.GetObjId(capturePoint);
+        const objectiveOffset = objectiveId - OBJECTIVE_ID_BASE;
+        const objective = objectives[objectiveOffset];
+        if (objective) {
+            objective.setCapturePoint(capturePoint);
+            activeOffsets.add(objectiveOffset);
+        }
+    }
+
+    activeObjectiveCount = 0;
+    for (let i = 0; i < objectives.length; i++) {
+        if (activeOffsets.has(i)) {
+            activeObjectiveCount += 1;
+        } else {
+            objectives[i] = null;
+        }
+    }
+}
 
 function getPlayerState(player: mod.Player): PlayerState {
     const id = mod.GetObjId(player);
@@ -347,18 +486,16 @@ function isPlayerInVehicle(player: mod.Player): boolean {
     return mod.IsPlayerValid(player) && mod.GetSoldierState(player, mod.SoldierStateBool.IsInVehicle);
 }
 
-function getCapturePointState(cp: mod.CapturePoint): CapturePointState {
+function getObjectiveState(cp: mod.CapturePoint): Objective {
     const id = mod.GetObjId(cp);
-    capturePointById.set(id, cp);
-
-    let state = capturePointStates.get(id);
-    if (!state) {
-        state = new CapturePointState(cp);
-        capturePointStates.set(id, state);
-    } else {
-        state.capturePoint = cp;
+    const objective = getObjectiveById(id);
+    if (objective) {
+        objective.setCapturePoint(cp);
+        return objective;
     }
-    return state;
+
+    mod.SendErrorReport(mod.Message("Missing objective state for capture point {}", id));
+    return getFirstObjective()!;
 }
 
 // --- 1i. Cached Handles ---
@@ -371,7 +508,6 @@ let TEAM_1: mod.Team;
 let TEAM_2: mod.Team;
 
 const teamById = new Map<number, mod.Team>();
-const capturePointById = new Map<number, mod.CapturePoint>();
 const playerById = new Map<number, mod.Player>();
 
 function ensureStateInitialized(): void {
@@ -388,10 +524,7 @@ function ensureStateInitialized(): void {
         teamById.set(mod.GetObjId(TEAM_2), TEAM_2);
 
         const allCPs = mod.AllCapturePoints();
-        for (let i = 0; i < mod.CountOf(allCPs); i++) {
-            const cp = mod.ValueInArray(allCPs, i) as mod.CapturePoint;
-            getCapturePointState(cp);
-        }
+        initObjectiveRegistry(allCPs);
 
         initRuntimeValues();
         initTeams();
@@ -572,7 +705,7 @@ function getPlayerCondition(player: mod.Player, n: number): ConditionState {
 }
 
 function getCapturePointCondition(cp: mod.CapturePoint, n: number): ConditionState {
-    return getCapturePointState(cp).conditions.getConditionState(n);
+    return getObjectiveState(cp).conditions.getConditionState(n);
 }
 
 function isDefined<T>(value: T | null | undefined): value is T {
@@ -598,6 +731,12 @@ function filterModArray(array: mod.Array, predicate: (value: any) => boolean): m
         if (predicate(value)) result = mod.AppendToArray(result, value);
     }
     return result;
+}
+
+function randomArrayValue<T>(values: T[]): T | undefined {
+    if (values.length === 0) return undefined;
+    const index = Math.min(values.length - 1, Math.floor(mod.RandomReal(0, values.length)));
+    return values[index];
 }
 
 async function waitUntil(duration: number, condition: () => boolean, pollInterval = 0.05): Promise<void> {
@@ -672,35 +811,16 @@ class UIController {
         mod.AddUIText("RightBarBG", mod.CreateVector(160, 60, 0), mod.CreateVector(200, 10, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, enemyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
         this.setupScoreUI("Team1ScoreLeft", "Team1ScoreRight", "Team1LeftBar", "Team1RightBar", mod.GetTeam(1))
         this.setupScoreUI("Team2ScoreLeft", "Team2ScoreRight", "Team2LeftBar", "Team2RightBar", mod.GetTeam(2))
-        for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
-            mod.AddUIText(team1ObjectiveTextUI[i], mod.CreateVector(mod.Multiply(mod.Subtract(
-                i,
-                mod.Divide(
-                    mod.Subtract(
-                        mod.CountOf(mod.AllCapturePoints()),
-                        1),
-                    2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(flagLetters[i]), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
-            mod.AddUIText(team1ObjectiveOutlineUI[i], mod.CreateVector(mod.Multiply(mod.Subtract(
-                i,
-                mod.Divide(
-                    mod.Subtract(
-                        mod.CountOf(mod.AllCapturePoints()),
-                        1),
-                    2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.OutlineThin, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
-            mod.AddUIText(team2ObjectiveTextUI[i], mod.CreateVector(mod.Multiply(mod.Subtract(
-                i,
-                mod.Divide(
-                    mod.Subtract(
-                        mod.CountOf(mod.AllCapturePoints()),
-                        1),
-                    2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(flagLetters[i]), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
-            mod.AddUIText(team2ObjectiveOutlineUI[i], mod.CreateVector(mod.Multiply(mod.Subtract(
-                i,
-                mod.Divide(
-                    mod.Subtract(
-                        mod.CountOf(mod.AllCapturePoints()),
-                        1),
-                    2)), 50), 90, 0), mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.OutlineThin, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
+        let objectiveDisplayIndex = 0;
+        for (const objective of objectives) {
+            if (!objective) continue;
+
+            const objectivePosition = mod.CreateVector((objectiveDisplayIndex - (activeObjectiveCount - 1) / 2) * 50, 90, 0);
+            mod.AddUIText(objective.team1TextUI, objectivePosition, mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(objective.letter), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
+            mod.AddUIText(objective.team1OutlineUI, objectivePosition, mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.OutlineThin, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
+            mod.AddUIText(objective.team2TextUI, objectivePosition, mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message(objective.letter), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
+            mod.AddUIText(objective.team2OutlineUI, objectivePosition, mod.CreateVector(30, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.OutlineThin, mod.Message(""), 24, mod.CreateVector(1, 1, 1), 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(2))
+            objectiveDisplayIndex += 1;
         }
         mod.AddUIText("LeftFlash1", scorePositionLeft, mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, friendlyTextColour, 0, mod.UIBgFill.Solid, mod.Message(""), 32, friendlyTextColour, 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
         mod.AddUIText("RightFlash1", scorePositionRight, mod.CreateVector(80, 40, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, enemyTextColour, 0, mod.UIBgFill.Solid, mod.Message(""), 32, enemyTextColour, 1, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI, mod.GetTeam(1))
@@ -850,21 +970,23 @@ class UIController {
     }
 
     updateFlagIcons(): void {
-        for (let i = 0; i < mod.CountOf(mod.AllCapturePoints()); i++) {
-            const team1Text = mod.FindUIWidgetWithName(team1ObjectiveTextUI[i]);
-            const team2Text = mod.FindUIWidgetWithName(team2ObjectiveTextUI[i]);
-            const team1Outline = mod.FindUIWidgetWithName(team1ObjectiveOutlineUI[i]);
-            const team2Outline = mod.FindUIWidgetWithName(team2ObjectiveOutlineUI[i]);
-            const ownerTeam = mod.GetCurrentOwnerTeam(mod.GetCapturePoint(200 + i));
+        for (const objective of objectives) {
+            if (!objective) continue;
 
-            if (mod.Equals(ownerTeam, mod.GetTeam(1))) {
+            const team1Text = mod.FindUIWidgetWithName(objective.team1TextUI);
+            const team2Text = mod.FindUIWidgetWithName(objective.team2TextUI);
+            const team1Outline = mod.FindUIWidgetWithName(objective.team1OutlineUI);
+            const team2Outline = mod.FindUIWidgetWithName(objective.team2OutlineUI);
+            const ownerTeam = mod.GetCurrentOwnerTeam(objective.getCapturePoint());
+
+            if (sameTeam(ownerTeam, TEAM_1)) {
                 mod.SetUITextColor(team1Text, friendlyTextColour)
                 mod.SetUIWidgetBgColor(team1Text, friendlyBGColour)
                 mod.SetUITextColor(team2Text, enemyTextColour)
                 mod.SetUIWidgetBgColor(team2Text, enemyBGColour)
                 mod.SetUIWidgetBgColor(team1Outline, friendlyTextColour)
                 mod.SetUIWidgetBgColor(team2Outline, enemyTextColour)
-            } else if (mod.Equals(ownerTeam, mod.GetTeam(2))) {
+            } else if (sameTeam(ownerTeam, TEAM_2)) {
                 mod.SetUITextColor(team1Text, enemyTextColour)
                 mod.SetUIWidgetBgColor(team1Text, enemyBGColour)
                 mod.SetUITextColor(team2Text, friendlyTextColour)
@@ -889,7 +1011,7 @@ class UIController {
         const capturePoint = eventInfo.eventCapturePoint;
         const playerState = getPlayerState(player);
         const teamState = getTeamState(playerState.team);
-        const capturePointState = getCapturePointState(capturePoint);
+        const capturePointState = getObjectiveState(capturePoint);
         const capturePointId = mod.GetObjId(capturePoint);
         const captureProgress = mod.GetCaptureProgress(capturePoint);
         const ownerProgressTeam = mod.GetOwnerProgressTeam(capturePoint);
@@ -924,11 +1046,13 @@ class UIController {
     }
 
     flashCaptureProgressUI(capturePoint: mod.CapturePoint, flashAlpha: number): void {
-        const cpOffset = mod.GetObjId(capturePoint) - 200;
-        const team1Text = mod.FindUIWidgetWithName(team1ObjectiveTextUI[cpOffset]);
-        const team2Text = mod.FindUIWidgetWithName(team2ObjectiveTextUI[cpOffset]);
-        const team1Outline = mod.FindUIWidgetWithName(team1ObjectiveOutlineUI[cpOffset]);
-        const team2Outline = mod.FindUIWidgetWithName(team2ObjectiveOutlineUI[cpOffset]);
+        const objective = getObjectiveByCapturePoint(capturePoint);
+        if (!objective) return;
+
+        const team1Text = mod.FindUIWidgetWithName(objective.team1TextUI);
+        const team2Text = mod.FindUIWidgetWithName(objective.team2TextUI);
+        const team1Outline = mod.FindUIWidgetWithName(objective.team1OutlineUI);
+        const team2Outline = mod.FindUIWidgetWithName(objective.team2OutlineUI);
         const captureProgress = mod.GetCaptureProgress(capturePoint);
 
         if (captureProgress > 0 && captureProgress < 1) {
@@ -975,14 +1099,13 @@ class UIController {
         for (const widgetName of scoreWidgets) {
             mod.DeleteUIWidget(mod.FindUIWidgetWithName(widgetName))
         }
-        const objectiveWidgets = [
-            ...team1ObjectiveTextUI,
-            ...team2ObjectiveTextUI,
-            ...team1ObjectiveOutlineUI,
-            ...team2ObjectiveOutlineUI,
-        ];
-        for (const widgetName of objectiveWidgets) {
-            mod.DeleteUIWidget(mod.FindUIWidgetWithName(widgetName))
+        for (const objective of objectives) {
+            if (!objective) continue;
+
+            mod.DeleteUIWidget(mod.FindUIWidgetWithName(objective.team1TextUI))
+            mod.DeleteUIWidget(mod.FindUIWidgetWithName(objective.team2TextUI))
+            mod.DeleteUIWidget(mod.FindUIWidgetWithName(objective.team1OutlineUI))
+            mod.DeleteUIWidget(mod.FindUIWidgetWithName(objective.team2OutlineUI))
         }
     }
 
@@ -1347,9 +1470,11 @@ class CapturePointController {
         }
         this.spawnObjectiveVehicles(eventInfo)
         if (FLAGS.ENABLE_VO) {
-            const flag = flagAnnounce[mod.GetObjId(eventInfo.eventCapturePoint) - 200];
-            mod.PlayVO(audio.vo1!, mod.VoiceOverEvents2D.ObjectiveCaptured, flag, mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))
-            mod.PlayVO(audio.vo2!, mod.VoiceOverEvents2D.ObjectiveCapturedEnemy, flag, getTeamState(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)).otherTeam)
+            const objective = getObjectiveByCapturePoint(eventInfo.eventCapturePoint);
+            if (objective?.voiceFlag !== null && objective?.voiceFlag !== undefined) {
+                mod.PlayVO(audio.vo1!, mod.VoiceOverEvents2D.ObjectiveCaptured, objective.voiceFlag, mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint))
+                mod.PlayVO(audio.vo2!, mod.VoiceOverEvents2D.ObjectiveCapturedEnemy, objective.voiceFlag, getTeamState(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)).otherTeam)
+            }
         }
     }
 
@@ -1365,17 +1490,17 @@ class CapturePointController {
             mod.SetCapturePointOwner(eventInfo.eventCapturePoint, mod.GetTeam(2))
         }
         await mod.Wait(mod.RandomReal(0, 1))
-        const cpState = getCapturePointState(eventInfo.eventCapturePoint);
+        const cpState = getObjectiveState(eventInfo.eventCapturePoint);
         cpState.progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
         cpState.setProgressVisuals(cpState.progress);
         while (true) {
             uiController.flashCaptureProgressUI(eventInfo.eventCapturePoint, capturePointFlash)
-            if (mod.NotEqualTo(getCapturePointState(eventInfo.eventCapturePoint).progress, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
-                const cpState = getCapturePointState(eventInfo.eventCapturePoint);
+            if (mod.NotEqualTo(getObjectiveState(eventInfo.eventCapturePoint).progress, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
+                const cpState = getObjectiveState(eventInfo.eventCapturePoint);
                 cpState.setProgressVisuals(mod.GetCaptureProgress(eventInfo.eventCapturePoint));
                 uiController.manageCapturePointUI(eventInfo.eventCapturePoint, cpState.progress, eventInfo)
             }
-            getCapturePointState(eventInfo.eventCapturePoint).progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+            getObjectiveState(eventInfo.eventCapturePoint).progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
             await mod.Wait(0.1)
         }
     }
@@ -1384,96 +1509,29 @@ class CapturePointController {
         uiController.updateFlagIcons()
         await mod.Wait(0.2)
         uiController.updateScoreboard()
-        const flag = flagAnnounce[mod.GetObjId(eventInfo.eventCapturePoint) - 200];
+        const objective = getObjectiveByCapturePoint(eventInfo.eventCapturePoint);
+        const voiceFlag = objective?.voiceFlag;
+        if (voiceFlag === null || voiceFlag === undefined) return;
+
         if (mod.NotEqualTo(mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint), mod.GetTeam(0))) {
-            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveNeutralised, flag, mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
-            mod.PlayVO(audio.vo4!, mod.VoiceOverEvents2D.ObjectiveLost, flag, mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveNeutralised, voiceFlag, mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo4!, mod.VoiceOverEvents2D.ObjectiveLost, voiceFlag, mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint))
         } else {
-            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveCapturing, flag, mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveCapturing, voiceFlag, mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
         }
     }
 
     spawnObjectiveVehicles(eventInfo: CapturePointEventInfo): void {
-        if (mod.Equals(
-            eventInfo.eventCapturePoint,
-            mod.GetCapturePoint(200))) {
-            if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(1))) {
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(600), true)
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(601), false)
-            } else if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(2))) {
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(601), true)
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(600), false)
-            } else {
-            }
-        }
-        if (mod.Equals(
-            eventInfo.eventCapturePoint,
-            mod.GetCapturePoint(201))) {
-            if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(1))) {
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(610), true)
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(611), false)
-            } else if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(2))) {
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(611), true)
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(610), false)
-            } else {
-            }
-        }
-        if (mod.Equals(
-            eventInfo.eventCapturePoint,
-            mod.GetCapturePoint(202))) {
-            if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(1))) {
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(620), true)
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(621), false)
-            } else if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(2))) {
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(621), true)
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(620), false)
-            } else {
-            }
-        }
-        if (mod.Equals(
-            eventInfo.eventCapturePoint,
-            mod.GetCapturePoint(203))) {
-            if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(1))) {
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(630), true)
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(631), false)
-            } else if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(2))) {
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(631), true)
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(630), false)
-            } else {
-            }
-        }
-        if (mod.Equals(
-            eventInfo.eventCapturePoint,
-            mod.GetCapturePoint(204))) {
-            if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(1))) {
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(640), true)
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(641), false)
-            } else if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(2))) {
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(641), true)
-                mod.SetVehicleSpawnerAutoSpawn(mod.GetVehicleSpawner(640), false)
-            } else {
-            }
-        }
+        const objective = getObjectiveByCapturePoint(eventInfo.eventCapturePoint);
+        if (!objective || !objective.hasVehicleSpawners()) return;
+
+        const ownerTeam = mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint);
+        const activeSpawner = objective.getVehicleSpawnerForTeam(ownerTeam);
+        const inactiveSpawner = objective.getOtherVehicleSpawnerForTeam(ownerTeam);
+        if (!isDefined(activeSpawner) || !isDefined(inactiveSpawner)) return;
+
+        mod.SetVehicleSpawnerAutoSpawn(activeSpawner, true)
+        mod.SetVehicleSpawnerAutoSpawn(inactiveSpawner, false)
     }
 
     shouldShowCaptureUI(eventInfo: PlayerCapturePointEventInfo): boolean {
@@ -1728,8 +1786,9 @@ class AIController {
             mod.AllVehicles(),
             (vehicle: any) => mod.CountOf(mod.GetAllPlayersInVehicle(vehicle)) < 2);
 
+        const safeSpawnPoints: mod.CapturePoint[] = [];
         const teleportToSpawnObjectiveAndTryVehicle = () => {
-            const spawnPoint = mod.RandomValueInArray(playerState.aiSpawnPoints) as mod.CapturePoint | undefined;
+            const spawnPoint = randomArrayValue(safeSpawnPoints);
             if (!isDefined(spawnPoint)) return;
 
             mod.Teleport(player, mod.GetObjectPosition(spawnPoint), 1)
@@ -1740,17 +1799,20 @@ class AIController {
         };
 
         if (!isPlayerInVehicle(player)) {
-            playerState.aiSpawnPoints = filterModArray(
-                mod.AllCapturePoints(),
-                (capturePoint: any) => {
-                    const capturePointPosition = mod.GetObjectPosition(capturePoint);
-                    const closestEnemy = mod.ClosestPlayerTo(capturePointPosition, enemyTeam);
-                    return mod.Equals(playerTeam, mod.GetCurrentOwnerTeam(capturePoint)) &&
-                        (!mod.IsPlayerValid(closestEnemy) ||
-                            mod.DistanceBetween(mod.GetObjectPosition(closestEnemy), capturePointPosition) > 40);
-                })
+            for (const objective of objectives) {
+                if (!objective) continue;
 
-            if (mod.CountOf(playerState.aiSpawnPoints) > 0) {
+                const capturePoint = objective.getCapturePoint();
+                const capturePointPosition = mod.GetObjectPosition(capturePoint);
+                const closestEnemy = mod.ClosestPlayerTo(capturePointPosition, enemyTeam);
+                if (mod.Equals(playerTeam, mod.GetCurrentOwnerTeam(capturePoint)) &&
+                    (!mod.IsPlayerValid(closestEnemy) ||
+                        mod.DistanceBetween(mod.GetObjectPosition(closestEnemy), capturePointPosition) > 40)) {
+                    safeSpawnPoints.push(capturePoint);
+                }
+            }
+
+            if (safeSpawnPoints.length > 0) {
                 if (isConquestAssaultAttacker) {
                     teleportToSpawnObjectiveAndTryVehicle();
                 }
@@ -1831,22 +1893,27 @@ class AIController {
 
         const playerState = getPlayerState(player);
         const playerTeam = playerState.team;
-        const allCapturePoints = mod.AllCapturePoints();
-        const enemyOwnedCapturePoints = filterModArray(
-            allCapturePoints,
-            (capturePoint: any) => mod.NotEqualTo(playerTeam, mod.GetCurrentOwnerTeam(capturePoint)));
+        const ownedCapturePoints: mod.CapturePoint[] = [];
+        const enemyOwnedCapturePoints: mod.CapturePoint[] = [];
 
-        if (mod.CountOf(enemyOwnedCapturePoints) === 0) {
-            const ownedCapturePoints = filterModArray(
-                allCapturePoints,
-                (capturePoint: any) => mod.Equals(playerTeam, mod.GetCurrentOwnerTeam(capturePoint)));
-            if (mod.CountOf(ownedCapturePoints) === 0) return;
-            const target = mod.RandomValueInArray(ownedCapturePoints) as mod.CapturePoint | undefined;
+        for (const objective of objectives) {
+            if (!objective) continue;
+
+            const capturePoint = objective.getCapturePoint();
+            if (sameTeam(playerTeam, mod.GetCurrentOwnerTeam(capturePoint))) {
+                ownedCapturePoints.push(capturePoint);
+            } else {
+                enemyOwnedCapturePoints.push(capturePoint);
+            }
+        }
+
+        if (enemyOwnedCapturePoints.length === 0) {
+            const target = randomArrayValue(ownedCapturePoints);
             if (!isDefined(target)) return;
             playerState.aiTarget = target;
             mod.AIDefendPositionBehavior(player, mod.GetObjectPosition(target), 0, 30)
         } else {
-            const target = mod.RandomValueInArray(enemyOwnedCapturePoints) as mod.CapturePoint | undefined;
+            const target = randomArrayValue(enemyOwnedCapturePoints);
             if (!isDefined(target)) return;
             playerState.aiTarget = target;
             mod.AIMoveToBehavior(player, mod.GetObjectPosition(target))
@@ -1908,20 +1975,24 @@ class ConquestGame {
     }
 
     trackScoreAndBleed(): void {
-        const capturePoints = mod.AllCapturePoints();
-        const team1 = mod.GetTeam(1);
-        const team2 = mod.GetTeam(2);
         const team1State = getTeamState(TEAM_1);
         const team2State = getTeamState(TEAM_2);
-        const team1OwnedCount = mod.CountOf(filterModArray(
-            capturePoints,
-            (capturePoint: any) => mod.Equals(mod.GetCurrentOwnerTeam(capturePoint), team1)));
-        const team2OwnedCount = mod.CountOf(filterModArray(
-            capturePoints,
-            (capturePoint: any) => mod.Equals(mod.GetCurrentOwnerTeam(capturePoint), team2)));
+        let team1OwnedCount = 0;
+        let team2OwnedCount = 0;
+
+        for (const objective of objectives) {
+            if (!objective) continue;
+
+            const ownerTeam = mod.GetCurrentOwnerTeam(objective.getCapturePoint());
+            if (sameTeam(ownerTeam, TEAM_1)) {
+                team1OwnedCount += 1;
+            } else if (sameTeam(ownerTeam, TEAM_2)) {
+                team2OwnedCount += 1;
+            }
+        }
 
         if (FLAGS.TOTAL_CONTROL_TICKET_BLEED) {
-            const capturePointCount = mod.CountOf(capturePoints);
+            const capturePointCount = activeObjectiveCount;
             if (team1OwnedCount === capturePointCount) {
                 team2State.score -= CONFIG.TOTAL_CONTROL_BONUS;
             } else if (team2OwnedCount === capturePointCount) {
@@ -1973,7 +2044,7 @@ class ConquestGame {
 
     async setupMap(): Promise<void> {
         const spawnAudio = (asset: mod.RuntimeSpawn_Common) => mod.SpawnObject(asset, ZERO_VECTOR, ZERO_VECTOR, ZERO_VECTOR);
-        const capturePoints = mod.AllCapturePoints();
+        const firstObjective = getFirstObjective();
 
         mod.SetGameModeTimeLimit(CONFIG.TIME_LIMIT)
         mod.SetGameModeTargetScore(1)
@@ -1985,16 +2056,18 @@ class ConquestGame {
         uiController.setupMainUI()
         uiController.updateScoreboard()
         uiController.updateFlagIcons()
-        if (FLAGS.ENABLE_SNOW) {
+        if (FLAGS.ENABLE_SNOW && firstObjective) {
             snowVolume = mod.SpawnObject(
                 mod.RuntimeSpawn_Common.EnvironmentDecalVolume_Winter_Event,
-                mod.GetObjectPosition(mod.GetCapturePoint(200)),
+                mod.GetObjectPosition(firstObjective.getCapturePoint()),
                 ZERO_VECTOR,
                 mod.CreateVector(10000, 10000, 10000));
         }
         uiController.setupColourFilter()
-        for (let i = 0; i < mod.CountOf(capturePoints); i++) {
-            capturePointController.setupCapturePoint(mod.ValueInArray(capturePoints, i))
+        for (const objective of objectives) {
+            if (!objective) continue;
+
+            capturePointController.setupCapturePoint(objective.getCapturePoint())
         }
         mod.SetUnspawnDelayInSeconds(mod.GetSpawner(901), 300)
         mod.SetUnspawnDelayInSeconds(mod.GetSpawner(902), 300)
@@ -2083,19 +2156,25 @@ class ConquestGame {
     }
 
     checkConquestAssaultWin(): void {
-        if (FLAGS.CONQUEST_ASSAULT && mod.GreaterThan(
-            mod.GetMatchTimeElapsed(),
-            10) && mod.Equals(
-                mod.CountOf(filterModArray(
-                    mod.AllCapturePoints(),
-                    (currentArrayElement: any) => mod.NotEqualTo(mod.GetTeam(2), mod.GetCurrentOwnerTeam(currentArrayElement)))),
-                0) && mod.Equals(
-                    mod.CountOf(filterModArray(
-                        mod.AllPlayers(),
-                        (currentArrayElement: any) => mod.NotEqualTo(
-                            mod.Equals(mod.GetTeam(2), mod.GetTeam(currentArrayElement)),
-                            isAlivePlayer(currentArrayElement)))),
-                    0)) {
+        if (!FLAGS.CONQUEST_ASSAULT || mod.GetMatchTimeElapsed() <= 10) return;
+
+        let team2OwnsAllObjectives = true;
+        for (const objective of objectives) {
+            if (!objective) continue;
+
+            if (!sameTeam(TEAM_2, mod.GetCurrentOwnerTeam(objective.getCapturePoint()))) {
+                team2OwnsAllObjectives = false;
+                break;
+            }
+        }
+
+        const team2AlivePlayerConditionCount = mod.CountOf(filterModArray(
+            mod.AllPlayers(),
+            (currentArrayElement: any) => mod.NotEqualTo(
+                mod.Equals(mod.GetTeam(2), mod.GetTeam(currentArrayElement)),
+                isAlivePlayer(currentArrayElement))));
+
+        if (team2OwnsAllObjectives && team2AlivePlayerConditionCount === 0) {
             getTeamState(TEAM_2).score = 0;
         }
     }
