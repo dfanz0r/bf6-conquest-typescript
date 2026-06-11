@@ -14,17 +14,22 @@ const CONFIG = {
     TOTAL_CONTROL_BONUS: 10,
     LOW_TICKET_MUSIC_THRESHOLD: 100,
     MAX_CUSTOM_AI: 36,
+    INVISIBLE_WALL_TRIGGER_ID: 1500,
 } as const;
 
 const FLAGS = {
     ENABLE_CUSTOM_AI: true,
     ENABLE_TEAM_SWITCHING: true,
+    ENABLE_HEADER_UI: true,
     LOSER_ONLY_TICKET_BLEED: true,
     TOTAL_CONTROL_TICKET_BLEED: true,
     PLAYER_DEATHS_BLEED: true,
     ENABLE_VO: true,
     ENABLE_SNOW: false,
+    RANDOM_DAY_NIGHT: false,
+    NIGHT_MODE: false,
     GIVE_PLAYERS_NVG: false,
+    GIVE_PLAYERS_GAS_MASK: false,
     CONQUEST_ASSAULT: false,
     BF3_COLOUR_FILTER: false,
     BF4_COLOUR_FILTER: false,
@@ -60,6 +65,10 @@ let isGameOngoing = false;
 let isFXResetting = false;
 let capturePointFlash = 0;
 let botNameIndex = 0;
+let nightMode: boolean = FLAGS.NIGHT_MODE;
+let endMusicIntensity = 0;
+let drawnUICount = 0;
+let nightWeaponPackage: mod.WeaponPackage | null = null;
 
 let scorePositionLeft: mod.Vector;
 let scorePositionRight: mod.Vector;
@@ -80,6 +89,7 @@ const audio = {
     tickSoundTaking: null as mod.SFX | null,
     tickSoundLosing: null as mod.SFX | null,
     capturedSound: null as mod.SFX | null,
+    neutraliseSound: null as mod.SFX | null,
     oobSound: null as mod.SFX | null,
 };
 
@@ -155,6 +165,10 @@ const botNames: string[] = [
     "FaithWalker (Bot)",
     "SgtHamster (Bot)",
     "LoganTheBrawler (Bot)",
+    "bowie knife99 (Bot)",
+    "Atic (Bot)",
+    "Deco (Bot)",
+    "vixievpr (Bot)",
 ];
 
 // Player State
@@ -184,10 +198,17 @@ class PlayerState {
 
     isOutOfBounds = false;
     ignoreOOB = false;
+    invisibleWallTriggered = false;
 
+    isCustomAI = false;
     aiTarget: mod.Player | mod.CapturePoint | null = null;
     aiInAction = false;
+    failMoveCount = 0;
     startPosition: mod.Vector | null = null;
+    lastPosition: mod.Vector | null = null;
+    lastMovement: mod.Vector | null = null;
+    lastRotation = 0;
+    pushBackDistance = 0;
 
     conditions = new Conditions(PlayerConditionSlot.Count);
 }
@@ -198,6 +219,7 @@ class TeamState {
     faction: "NATO" | "PAX" = "NATO";
     score = 0;
     startingScore = 0;
+    flagsOwned = 0;
 
     constructor(
         public team: mod.Team,
@@ -530,6 +552,10 @@ function initRuntimeValues(): void {
     isFXResetting = false;
     capturePointFlash = 0;
     botNameIndex = 0;
+    nightMode = FLAGS.NIGHT_MODE;
+    endMusicIntensity = 0;
+    drawnUICount = 0;
+    nightWeaponPackage = null;
 
     scorePositionLeft = mod.CreateVector(-315, 45, 0);
     scorePositionRight = mod.CreateVector(315, 45, 0);
@@ -568,7 +594,14 @@ function initPlayerState(player: mod.Player): PlayerState {
     state.captureSessionActive = false;
     state.isOutOfBounds = false;
     state.ignoreOOB = false;
+    state.invisibleWallTriggered = false;
+    state.isCustomAI = false;
     state.aiInAction = false;
+    state.failMoveCount = 0;
+    state.lastPosition = null;
+    state.lastMovement = null;
+    state.lastRotation = 0;
+    state.pushBackDistance = 0;
 
     return state;
 }
@@ -658,26 +691,29 @@ enum PlayerConditionSlot {
     HandlePlayerDeath = 6,
     UpdatePlayerCountOnDeath = 7,
     AddEquipment = 8,
-    AIScoutOnDeploy = 9,
-    AIReadyForAttack = 10,
-    HandlePlayerJoin = 11,
-    UpdateDeathOnUndeploy = 12,
-    ShowCaptureUI = 13,
-    AIFindNewObjective = 14,
-    HideCaptureUI = 15,
-    HandleTeamSwitchAndRepel = 16,
-    EnterAreaTrigger = 17,
-    ExitAreaTrigger = 18,
-    AITargetDamager = 19,
-    AIExitVehicle = 20,
-    AIEnterVehicle = 21,
-    AIRetryMove = 22,
-    Count = 23,
+    UndeployIfSpawnedOOB = 9,
+    AIScoutOnSpawnerSpawned = 10,
+    AIReadyForAttack = 11,
+    HandlePlayerJoin = 12,
+    UpdateDeathOnUndeploy = 13,
+    ShowCaptureUI = 14,
+    AIFindNewObjective = 15,
+    HideCaptureUI = 16,
+    HandleTeamSwitchAndRepel = 17,
+    EnterAreaTrigger = 18,
+    EnterInvisibleWallTrigger = 19,
+    ExitAreaTrigger = 20,
+    AITargetDamager = 21,
+    AIExitVehicle = 22,
+    AIEnterVehicle = 23,
+    AIRetryMove = 24,
+    AIMoveSucceeded = 25,
+    Count = 26,
 }
 
 enum CapturePointConditionSlot {
     HandleCaptured = 0,
-    NotifyCapture = 1,
+    HandleLost = 1,
     RunProgressLoop = 2,
     Count = 3,
 }
@@ -783,6 +819,9 @@ class UIController {
 
     setupMainUI(): void {
         mod.AddUIContainer("container", mod.CreateVector(0, 0, 0), mod.CreateVector(2000, 2000, 0), mod.UIAnchor.TopCenter)
+        if (!FLAGS.ENABLE_HEADER_UI) {
+            mod.SetUIWidgetVisible(mod.FindUIWidgetWithName("container"), false)
+        }
         mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName("container"), mod.UIBgFill.None)
         mod.SetUIWidgetDepth(mod.FindUIWidgetWithName("container"), mod.UIDepth.AboveGameUI)
         mod.AddUIText("Timer", mod.CreateVector(0, 50, 0), mod.CreateVector(85, 30, 0), mod.UIAnchor.TopCenter, mod.FindUIWidgetWithName("container"), true, 0, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, mod.Message("{} : {}{}", mod.Floor(mod.Divide(
@@ -870,16 +909,12 @@ class UIController {
         }
 
         if (captureProgress < 1) {
-            const progressIncreasing = captureProgress > oldProgress;
-            const progressDecreasing = captureProgress < oldProgress;
-            const team1IsProgressOwner = sameTeam(ownerProgressTeam, TEAM_1);
-
-            if (progressIncreasing) {
-                team1ObjectiveState.capMessage = team1IsProgressOwner ? "CAPTURING" : "LOSING";
-                team2ObjectiveState.capMessage = team1IsProgressOwner ? "LOSING" : "CAPTURING";
-            } else if (progressDecreasing) {
-                team1ObjectiveState.capMessage = team1IsProgressOwner ? "LOSING" : "CAPTURING";
-                team2ObjectiveState.capMessage = team1IsProgressOwner ? "CAPTURING" : "LOSING";
+            if (objective.playersOnPoint(TEAM_1) > objective.playersOnPoint(TEAM_2)) {
+                team1ObjectiveState.capMessage = "CAPTURING";
+                team2ObjectiveState.capMessage = "LOSING";
+            } else if (objective.playersOnPoint(TEAM_2) > objective.playersOnPoint(TEAM_1)) {
+                team1ObjectiveState.capMessage = "LOSING";
+                team2ObjectiveState.capMessage = "CAPTURING";
             } else {
                 team1ObjectiveState.capMessage = "CONTESTED";
                 team2ObjectiveState.capMessage = "CONTESTED";
@@ -912,9 +947,9 @@ class UIController {
         mod.AddUIText("ObjCounter", mod.CreateVector(0, 210, 0), mod.CreateVector(220, 40, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.None, mod.Message(""), 28, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, player)
         mod.AddUIContainer("ObjProgressBG", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 0.8, mod.UIBgFill.Blur, player)
         mod.AddUIContainer("ObjProgress", mod.CreateVector(0, 200, 0), mod.CreateVector(220, 7, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.Solid, player)
-        mod.AddUIText("OOBBackground", mod.CreateVector(0, 0, 0), mod.CreateVector(5000, 5000, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 0.9, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, player)
-        mod.AddUIText("OOBText", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, enemyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message("Return To Combat"), 56, enemyTextColour, 1, mod.UIAnchor.TopCenter, player)
-        mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(400, 150, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", playerState.outOfBoundsCountdown), 72, enemyTextColour, 1, mod.UIAnchor.BottomCenter, player)
+        mod.AddUIText("OOBBackground", mod.CreateVector(0, 0, 0), mod.CreateVector(10000, 10000, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 0.9, mod.UIBgFill.Blur, mod.Message(""), 24, mod.CreateVector(0, 0, 0), 1, mod.UIAnchor.Center, player)
+        mod.AddUIText("OOBText", mod.CreateVector(0, 470, 0), mod.CreateVector(450, 150, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, enemyBGColour, 0.8, mod.UIBgFill.Blur, mod.Message("RETURN TO COMBAT"), 56, enemyTextColour, 1, mod.UIAnchor.TopCenter, player)
+        mod.AddUIText("OOBCounter", mod.CreateVector(0, 470, 0), mod.CreateVector(450, 150, 0), mod.UIAnchor.TopCenter, playerRoot, false, 1, mod.CreateVector(0, 0, 0), 0, mod.UIBgFill.None, mod.Message("{}", playerState.outOfBoundsCountdown), 72, enemyTextColour, 1, mod.UIAnchor.BottomCenter, player)
     }
 
     togglePlayerCaptureUI(enabled: boolean, eventInfo: PlayerCapturePointEventInfo): void {
@@ -995,7 +1030,7 @@ class UIController {
 
         if (playerState.capturePointState !== captureProgress) {
             playerState.captureProgressTick += 1;
-            if (playerState.captureProgressTick % 10 === 0) {
+            if (playerState.captureProgressTick % 7 === 0) {
                 const progressIncreasing = captureProgress > playerState.capturePointState;
                 const playerIsProgressOwner = sameTeam(playerState.team, ownerProgressTeam);
                 const tickSound = progressIncreasing === playerIsProgressOwner ? audio.tickSoundTaking! : audio.tickSoundLosing!;
@@ -1007,7 +1042,7 @@ class UIController {
     }
 
     showVersion(): void {
-        mod.AddUIText("ver", mod.CreateVector(10, 2, 0), mod.CreateVector(300, 30, 0), mod.UIAnchor.BottomLeft, mod.GetUIRoot(), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.None, mod.Message("ViperStudiosAndy | andy6170 | Conquest Template V10"), 12, mod.CreateVector(1, 1, 1), 0.3, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
+        mod.AddUIText("ver", mod.CreateVector(10, 2, 0), mod.CreateVector(300, 30, 0), mod.UIAnchor.BottomLeft, mod.GetUIRoot(), true, 0, mod.CreateVector(0, 0, 0), 1, mod.UIBgFill.None, mod.Message("ViperStudiosAndy | andy6170 | Conquest Template V11"), 12, mod.CreateVector(1, 1, 1), 0.5, mod.UIAnchor.Center, mod.UIDepth.AboveGameUI)
     }
 
     flashCaptureProgressUI(capturePoint: mod.CapturePoint, flashAlpha: number): void {
@@ -1151,6 +1186,13 @@ class UIController {
         mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team1RightBar"), mod.CreateVector(team1RightBarX, 60, 0))
         mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team2LeftBar"), mod.CreateVector(team2LeftBarX, 60, 0))
         mod.SetUIWidgetPosition(mod.FindUIWidgetWithName("Team2RightBar"), mod.CreateVector(team2RightBarX, 60, 0))
+
+        const lowestScore = Math.min(team1State.score, team2State.score);
+        if (lowestScore < CONFIG.LOW_TICKET_MUSIC_THRESHOLD) {
+            endMusicIntensity = Math.min((lowestScore / CONFIG.LOW_TICKET_MUSIC_THRESHOLD) * 4, 4);
+        } else {
+            endMusicIntensity = 0;
+        }
     }
 }
 
@@ -1163,7 +1205,13 @@ class PlayerController {
         const player = eventInfo.eventPlayer;
         const playerState = getPlayerState(player);
 
-        playerState.score += 20;
+        playerState.score += 100;
+        if (playerState.captureSessionActive) {
+            playerState.score += 50;
+        }
+        if (eventInfo.eventDeathType !== undefined && mod.EventDeathTypeCompare(eventInfo.eventDeathType, mod.PlayerDeathTypes.Headshot)) {
+            playerState.score += 10;
+        }
         playerState.kills += 1;
         uiController.updatePlayerScoreboard(player)
     }
@@ -1176,7 +1224,7 @@ class PlayerController {
         const player = eventInfo.eventPlayer;
         const playerState = getPlayerState(player);
 
-        playerState.score += 5;
+        playerState.score += 50;
         playerState.assists += 1;
         uiController.updatePlayerScoreboard(player)
     }
@@ -1185,7 +1233,7 @@ class PlayerController {
         const revivedPlayer = eventInfo.eventOtherPlayer;
         const revivedPlayerState = getPlayerState(revivedPlayer);
 
-        revivedPlayerState.score += 10;
+        revivedPlayerState.score += 100;
         revivedPlayerState.revives += 1;
         uiController.updatePlayerScoreboard(revivedPlayer)
     }
@@ -1195,13 +1243,19 @@ class PlayerController {
         const playerState = getPlayerState(player);
         const teamState = tryGetTeamState(playerState.team);
 
-        if (FLAGS.PLAYER_DEATHS_BLEED && teamState) {
-            teamState.score -= 1;
+        if (playerState.captureSessionActive && isDefined(playerState.currentCapturePoint)) {
+            capturePointController.updatePlayerCountOnDeath(eventInfo);
+            capturePointController.refreshCaptureUIForPlayerObjective(player);
         }
-        playerState.deaths += 1;
+        if (!playerState.isCustomAI) {
+            if (FLAGS.PLAYER_DEATHS_BLEED && teamState) {
+                teamState.score -= 1;
+            }
+            playerState.deaths += 1;
+            uiController.updatePlayerScoreboard(player)
+            uiController.updateScoreboard()
+        }
         playerState.captureSessionActive = false;
-        uiController.updatePlayerScoreboard(player)
-        uiController.updateScoreboard()
     }
 
     shouldUndeploy(_eventInfo: PlayerEventInfo): boolean {
@@ -1214,11 +1268,15 @@ class PlayerController {
 
     shouldExitAreaTrigger(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }): boolean {
         const player = eventInfo.eventPlayer;
-        return this.isOutOfBoundsAreaTrigger(eventInfo.eventAreaTrigger, mod.GetTeam(player)) || !isAlivePlayer(player);
+        const triggerId = mod.GetObjId(eventInfo.eventAreaTrigger);
+        return triggerId === CONFIG.INVISIBLE_WALL_TRIGGER_ID ||
+            this.isOutOfBoundsAreaTrigger(eventInfo.eventAreaTrigger, mod.GetTeam(player)) ||
+            !isAlivePlayer(player);
     }
 
     private isOutOfBoundsAreaTrigger(areaTrigger: mod.AreaTrigger, playerTeam: mod.Team): boolean {
         const triggerId = mod.GetObjId(areaTrigger);
+        if (triggerId === CONFIG.INVISIBLE_WALL_TRIGGER_ID) return false;
         const isTeam2RestrictedArea = triggerId >= 1100 && triggerId < 1200 && mod.Equals(playerTeam, mod.GetTeam(2));
         const isTeam1RestrictedArea = triggerId >= 1200 && triggerId < 1300 && mod.Equals(playerTeam, mod.GetTeam(1));
         const isSharedRestrictedArea = triggerId >= 1300 && triggerId < 1400;
@@ -1232,7 +1290,41 @@ class PlayerController {
         }
     }
 
+    shouldEnterInvisibleWallTrigger(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }): boolean {
+        return mod.GetObjId(eventInfo.eventAreaTrigger) === CONFIG.INVISIBLE_WALL_TRIGGER_ID;
+    }
+
+    async enterInvisibleWallTrigger(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }): Promise<void> {
+        const player = eventInfo.eventPlayer;
+        const playerState = getPlayerState(player);
+        playerState.invisibleWallTriggered = true;
+        playerState.lastPosition = mod.GetObjectPosition(player);
+        const velocity = mod.GetSoldierState(player, mod.SoldierStateVector.GetLinearVelocity);
+        playerState.lastMovement = mod.CreateVector(mod.XComponentOf(velocity), 0, mod.ZComponentOf(velocity));
+        const rotation = mod.GetObjectRotation(player);
+        playerState.lastRotation = mod.RoundToInteger(mod.XComponentOf(rotation)) === 0
+            ? mod.Add(mod.XComponentOf(rotation), mod.YComponentOf(rotation))
+            : mod.Subtract(mod.XComponentOf(rotation), mod.YComponentOf(rotation));
+
+        if (mod.GetSoldierState(player, mod.SoldierStateBool.IsVaulting)) {
+            await mod.Wait(0.35)
+        }
+        playerState.pushBackDistance = isPlayerInVehicle(player) ? -5 : -0.6;
+        const movementDirection = mod.DistanceBetween(playerState.lastMovement, ZERO_VECTOR) > 0
+            ? mod.Normalize(playerState.lastMovement)
+            : mod.ForwardVector();
+        mod.Teleport(
+            player,
+            mod.Add(playerState.lastPosition, mod.Multiply(movementDirection, playerState.pushBackDistance)),
+            playerState.lastRotation)
+    }
+
     exitAreaTrigger(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }): void {
+        const playerState = getPlayerState(eventInfo.eventPlayer);
+        if (mod.GetObjId(eventInfo.eventAreaTrigger) === CONFIG.INVISIBLE_WALL_TRIGGER_ID) {
+            playerState.invisibleWallTriggered = false;
+            return;
+        }
         this.disableOutOfBounds(eventInfo)
     }
 
@@ -1339,9 +1431,43 @@ class PlayerController {
         playerState.outOfBoundsCountdown = -1;
     }
 
+    async undeployIfSpawnedOutOfBounds(eventInfo: PlayerEventInfo): Promise<void> {
+        await mod.Wait(0.1)
+        const player = eventInfo.eventPlayer;
+        if (!mod.IsPlayerValid(player)) return;
+
+        const playerState = getPlayerState(player);
+        if (!playerState.isOutOfBounds && !playerState.invisibleWallTriggered) return;
+
+        playerState.deaths -= 1;
+        await mod.Wait(0.6)
+        if (!mod.IsPlayerValid(player)) return;
+
+        playerState.ignoreOOB = true;
+        playerState.invisibleWallTriggered = false;
+        mod.UndeployPlayer(player)
+        mod.DisplayNotificationMessage(mod.Message("Spawn Out of Bounds"), player)
+        await mod.Wait(2)
+        playerState.ignoreOOB = false;
+    }
+
     addEquipment(player: mod.Player): void {
         if (FLAGS.GIVE_PLAYERS_NVG) {
             mod.AddEquipment(player, mod.Gadgets.Mask_NVG)
+        } else if (FLAGS.GIVE_PLAYERS_GAS_MASK) {
+            mod.AddEquipment(player, mod.Gadgets.Mask_Gas)
+        }
+
+        if (!nightMode) return;
+        mod.EnableScreenEffect(player, mod.ScreenEffects.Night, true)
+        if (!isAISoldier(player) || !isDefined(nightWeaponPackage)) return;
+
+        if (mod.IsSoldierClass(player, mod.SoldierClass.Assault)) {
+            mod.AddEquipment(player, mod.Weapons.AssaultRifle_M433, nightWeaponPackage)
+        } else if (mod.IsSoldierClass(player, mod.SoldierClass.Engineer)) {
+            mod.AddEquipment(player, mod.Weapons.Carbine_M4A1, nightWeaponPackage)
+        } else if (mod.IsSoldierClass(player, mod.SoldierClass.Support)) {
+            mod.AddEquipment(player, mod.Weapons.LMG_M123K, nightWeaponPackage)
         }
     }
 
@@ -1381,11 +1507,11 @@ class PlayerController {
         if (playerState.isOutOfBounds) {
             this.disableOutOfBounds(eventInfo)
         }
-        if (!FLAGS.ENABLE_CUSTOM_AI ||
-            !isAISoldier(player)) return;
+        if (!playerState.isCustomAI) return;
 
-        if (FLAGS.PLAYER_DEATHS_BLEED && mod.NotEqualTo(player, eventInfo.eventOtherPlayer)) {
+        if (isGameOngoing && FLAGS.PLAYER_DEATHS_BLEED && mod.NotEqualTo(player, eventInfo.eventOtherPlayer)) {
             getTeamState(playerState.team).score -= 1;
+            uiController.updateScoreboard()
         }
         playerState.deaths += 1;
         uiController.updatePlayerScoreboard(player)
@@ -1396,6 +1522,11 @@ class PlayerController {
             mod.DistanceBetween(playerPosition, mod.GetObjectPosition(closestTeammate)) > 20) {
             await mod.Wait(3)
             if (mod.IsPlayerValid(player)) {
+                mod.UndeployPlayer(player)
+            }
+        } else {
+            await mod.Wait(14)
+            if (mod.IsPlayerValid(player) && mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown)) {
                 mod.UndeployPlayer(player)
             }
         }
@@ -1410,11 +1541,14 @@ class CapturePointController {
         mod.SetMaxCaptureMultiplier(cp, 3)
     }
 
-    processObjectivePlayerData(player: mod.Player): void {
+    processObjectivePlayerData(player: mod.Player, captured: boolean): void {
         getPlayerState(player).captures += 1;
-        getPlayerState(player).score += 50;
+        getPlayerState(player).score += 200;
         uiController.updatePlayerScoreboard(player)
-        mod.PlaySound(audio.capturedSound!, 0.7, player)
+        const sound = captured ? audio.capturedSound : audio.neutraliseSound;
+        if (isDefined(sound)) {
+            mod.PlaySound(sound, 0.7, player)
+        }
     }
 
     async onCaptured(eventInfo: CapturePointEventInfo): Promise<void> {
@@ -1428,8 +1562,8 @@ class CapturePointController {
                 mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)));
         for (let i = 0; i < mod.CountOf(playersOnObjective); i++) {
             const player = mod.ValueInArray(playersOnObjective, i) as mod.Player;
-            this.processObjectivePlayerData(player)
-            if (isAISoldier(player)) {
+            this.processObjectivePlayerData(player, true)
+            if (getPlayerState(player).isCustomAI) {
                 aiController.startScouting(player)
             }
         }
@@ -1441,12 +1575,6 @@ class CapturePointController {
                 mod.PlayVO(audio.vo2!, mod.VoiceOverEvents2D.ObjectiveCapturedEnemy, objective.voiceFlag, getTeamState(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint)).otherTeam)
             }
         }
-    }
-
-    shouldNotifyCapture(eventInfo: CapturePointEventInfo): boolean {
-        return FLAGS.ENABLE_VO && mod.Equals(
-            mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-            mod.GetTeam(0)) && mod.LessThan(mod.GetCaptureProgress(eventInfo.eventCapturePoint), 0.05);
     }
 
     async runProgressLoop(eventInfo: CapturePointEventInfo): Promise<void> {
@@ -1471,19 +1599,28 @@ class CapturePointController {
         }
     }
 
-    async onCapturing(eventInfo: CapturePointEventInfo): Promise<void> {
+    async onLostNeutralised(eventInfo: CapturePointEventInfo): Promise<void> {
         uiController.updateFlagIcons()
         await mod.Wait(0.2)
         uiController.updateScoreboard()
+
+        const neutralisingTeam = mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint);
+        const playersOnObjective = filterModArray(
+            mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
+            (currentArrayElement: any) => mod.Equals(mod.GetTeam(currentArrayElement), neutralisingTeam));
+        for (let i = 0; i < mod.CountOf(playersOnObjective); i++) {
+            this.processObjectivePlayerData(mod.ValueInArray(playersOnObjective, i) as mod.Player, false)
+        }
+
         const objective = getObjectiveByCapturePoint(eventInfo.eventCapturePoint);
         const voiceFlag = objective?.voiceFlag;
         if (voiceFlag === null || voiceFlag === undefined) return;
 
         if (mod.NotEqualTo(mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint), mod.GetTeam(0))) {
-            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveNeutralised, voiceFlag, mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveNeutralised, voiceFlag, neutralisingTeam)
             mod.PlayVO(audio.vo4!, mod.VoiceOverEvents2D.ObjectiveLost, voiceFlag, mod.GetPreviousOwnerTeam(eventInfo.eventCapturePoint))
         } else {
-            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveCapturing, voiceFlag, mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint))
+            mod.PlayVO(audio.vo3!, mod.VoiceOverEvents2D.ObjectiveCapturing, voiceFlag, neutralisingTeam)
         }
     }
 
@@ -1547,6 +1684,7 @@ class CapturePointController {
         playerState.flagOwner = mod.GetTeam(3);
 
         this.updatePlayersOnPointCounts(capturePoint, playerTeam);
+        drawnUICount += 1;
 
         await mod.Wait(0.05)
         uiController.manageCapturePointUI(capturePoint, playerState.capturePointState, eventInfo)
@@ -1555,7 +1693,7 @@ class CapturePointController {
 
         if (!isAISoldier(player)) {
             playerState.captureProgressTick = 9;
-            while (playerState.captureSessionActive) {
+            while (playerState.captureSessionActive && isGameOngoing) {
                 if (!mod.IsPlayerValid(player)) {
                     break
                 }
@@ -1567,7 +1705,7 @@ class CapturePointController {
                 }
                 playerState.capturePointState = mod.GetCaptureProgress(capturePoint);
                 playerState.flagOwner = mod.GetCurrentOwnerTeam(capturePoint);
-                await waitUntil(0.1, () => !playerState.captureSessionActive)
+                await waitUntil(0.15, () => !playerState.captureSessionActive)
             }
             playerState.captureSessionActive = false;
             getPlayerCondition(player, PlayerConditionSlot.HideCaptureUI).update(false);
@@ -1579,31 +1717,53 @@ class CapturePointController {
     hideCaptureUI(eventInfo: PlayerCapturePointEventInfo): void {
         const playerState = getPlayerState(eventInfo.eventPlayer);
         this.updatePlayersOnPointForTeam(eventInfo.eventCapturePoint, playerState.team);
+        this.refreshCaptureUIForPlayerObjective(eventInfo.eventPlayer);
         playerState.captureSessionActive = false;
         getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HideCaptureUI).update(false);
     }
 
+    refreshCaptureUIForPlayerObjective(player: mod.Player): void {
+        const playerState = getPlayerState(player);
+        if (!isDefined(playerState.currentCapturePoint)) return;
+        uiController.manageCapturePointUI(
+            playerState.currentCapturePoint,
+            playerState.capturePointState,
+            { eventCapturePoint: playerState.currentCapturePoint })
+    }
+
     updatePlayerCountOnDeath(eventInfo: PlayerEventInfo): void {
         const playerState = getPlayerState(eventInfo.eventPlayer);
-        this.updatePlayersOnPointForTeam(playerState.currentCapturePoint!, playerState.team);
+        if (!isDefined(playerState.currentCapturePoint)) return;
+        this.updatePlayersOnPointForTeam(playerState.currentCapturePoint, playerState.team);
+        this.refreshCaptureUIForPlayerObjective(eventInfo.eventPlayer);
     }
 
     updatePlayerCountOnRevive(eventInfo: PlayerEventInfo): void {
         const playerState = getPlayerState(eventInfo.eventPlayer);
-        this.updatePlayersOnPointForTeam(playerState.currentCapturePoint!, playerState.team);
+        if (!isDefined(playerState.currentCapturePoint)) return;
+        this.updatePlayersOnPointForTeam(playerState.currentCapturePoint, playerState.team);
+        this.refreshCaptureUIForPlayerObjective(eventInfo.eventPlayer);
     }
 }
 class AIController {
     shouldRetryMove(eventInfo: PlayerEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer);
+        return getPlayerState(eventInfo.eventPlayer).isCustomAI;
     }
 
     retryMove(eventInfo: PlayerEventInfo): void {
-        this.startScouting(eventInfo.eventPlayer);
+        this.handleMoveFailOrReached(eventInfo);
+    }
+
+    shouldMoveSucceeded(eventInfo: PlayerEventInfo): boolean {
+        return getPlayerState(eventInfo.eventPlayer).isCustomAI;
+    }
+
+    moveSucceeded(eventInfo: PlayerEventInfo): void {
+        this.handleMoveFailOrReached(eventInfo);
     }
 
     shouldExitVehicle(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer);
+        return getPlayerState(eventInfo.eventPlayer).isCustomAI;
     }
 
     exitVehicle(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }): void {
@@ -1611,7 +1771,7 @@ class AIController {
     }
 
     shouldTargetOnKill(eventInfo: PlayerCombatEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer) && !isPlayerInVehicle(eventInfo.eventPlayer);
+        return getPlayerState(eventInfo.eventPlayer).isCustomAI && !isPlayerInVehicle(eventInfo.eventPlayer);
     }
 
     targetOnKill(eventInfo: PlayerCombatEventInfo): void {
@@ -1620,8 +1780,7 @@ class AIController {
     }
 
     shouldTargetOnKillAssist(eventInfo: PlayerCombatEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI &&
-            isAISoldier(eventInfo.eventPlayer) &&
+        return getPlayerState(eventInfo.eventPlayer).isCustomAI &&
             mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) &&
             !isPlayerInVehicle(eventInfo.eventPlayer);
     }
@@ -1632,11 +1791,12 @@ class AIController {
     }
 
     shouldScoutOnDeploy(eventInfo: PlayerEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer);
+        return getPlayerState(eventInfo.eventPlayer).isCustomAI;
     }
 
     async deployScout(eventInfo: PlayerEventInfo): Promise<void> {
-        await mod.Wait(0.2)
+        getPlayerState(eventInfo.eventPlayer).isCustomAI = true;
+        await mod.Wait(0.5)
         if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
             mod.SetPlayerIncomingDamageFactor(eventInfo.eventPlayer, 0.5)
             await this.deploy(eventInfo)
@@ -1644,7 +1804,7 @@ class AIController {
     }
 
     shouldFindNewObjective(eventInfo: PlayerCapturePointEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer) && !isPlayerInVehicle(eventInfo.eventPlayer);
+        return getPlayerState(eventInfo.eventPlayer).isCustomAI && !isPlayerInVehicle(eventInfo.eventPlayer);
     }
 
     async findNewObjective(eventInfo: PlayerCapturePointEventInfo): Promise<void> {
@@ -1664,7 +1824,7 @@ class AIController {
     }
 
     shouldReadyForAttack(eventInfo: PlayerEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer) && mod.LessThanEqualTo(CONFIG.MAX_CUSTOM_AI, 70);
+        return getPlayerState(eventInfo.eventPlayer).isCustomAI && mod.LessThanEqualTo(CONFIG.MAX_CUSTOM_AI, 70);
     }
 
     async readyForAttack(eventInfo: PlayerEventInfo): Promise<void> {
@@ -1699,8 +1859,7 @@ class AIController {
     }
 
     shouldTargetDamager(eventInfo: PlayerCombatEventInfo): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI &&
-            isAISoldier(eventInfo.eventPlayer) &&
+        return getPlayerState(eventInfo.eventPlayer).isCustomAI &&
             !getPlayerState(eventInfo.eventPlayer).aiInAction &&
             mod.NotEqualTo(mod.GetTeam(eventInfo.eventPlayer), mod.GetTeam(eventInfo.eventOtherPlayer)) &&
             !isPlayerInVehicle(eventInfo.eventPlayer);
@@ -1721,12 +1880,15 @@ class AIController {
     }
 
     shouldEnterVehicle(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }): boolean {
-        return FLAGS.ENABLE_CUSTOM_AI && isAISoldier(eventInfo.eventPlayer);
+        return getPlayerState(eventInfo.eventPlayer).isCustomAI;
     }
 
     async enterVehicle(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }): Promise<void> {
-        getPlayerState(eventInfo.eventPlayer).startPosition = mod.GetObjectPosition(eventInfo.eventPlayer);
-        await mod.Wait(10)
+        await mod.Wait(1)
+        if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
+            getPlayerState(eventInfo.eventPlayer).startPosition = mod.GetObjectPosition(eventInfo.eventPlayer);
+        }
+        await mod.Wait(15)
         if (mod.IsPlayerValid(eventInfo.eventPlayer)) {
             if (isPlayerInVehicle(eventInfo.eventPlayer)) {
                 if (mod.LessThan(
@@ -1740,6 +1902,21 @@ class AIController {
         }
     }
 
+    async handleMoveFailOrReached(eventInfo: PlayerEventInfo): Promise<void> {
+        const player = eventInfo.eventPlayer;
+        const playerState = getPlayerState(player);
+        if (playerState.failMoveCount < 2) {
+            mod.AIDefendPositionBehavior(player, mod.GetObjectPosition(player), 5, 20)
+            playerState.failMoveCount += 1;
+            await mod.Wait(5)
+            if (mod.IsPlayerValid(player) && !playerState.aiInAction) {
+                this.startScouting(player)
+            }
+        } else if (mod.IsPlayerValid(player)) {
+            mod.UndeployPlayer(player)
+        }
+    }
+
     spawnAIObjectives(eventInfo: PlayerEventInfo): void {
         const player = eventInfo.eventPlayer;
         const playerState = getPlayerState(player);
@@ -1747,20 +1924,13 @@ class AIController {
         const enemyTeam = getTeamState(playerTeam).otherTeam;
         const isConquestAssaultAttacker = FLAGS.CONQUEST_ASSAULT && mod.Equals(mod.GetTeam(2), playerTeam);
 
-        const openVehicles = () => filterModArray(
-            mod.AllVehicles(),
-            (vehicle: any) => mod.CountOf(mod.GetAllPlayersInVehicle(vehicle)) < 2);
-
         const safeSpawnPoints: mod.CapturePoint[] = [];
         const teleportToSpawnObjectiveAndTryVehicle = () => {
             const spawnPoint = randomArrayValue(safeSpawnPoints);
             if (!isDefined(spawnPoint)) return;
 
             mod.Teleport(player, mod.GetObjectPosition(spawnPoint), 1)
-            const vehicles = openVehicles();
-            if (mod.CountOf(vehicles) > 0) {
-                this.deployAIVehicle(mod.RandomValueInArray(vehicles) as mod.Vehicle | undefined, 60, eventInfo)
-            }
+            this.tryDeployNearbyAIVehicle(60, eventInfo)
         };
 
         if (!isPlayerInVehicle(player)) {
@@ -1780,14 +1950,35 @@ class AIController {
             if (safeSpawnPoints.length > 0) {
                 if (isConquestAssaultAttacker) {
                     teleportToSpawnObjectiveAndTryVehicle();
-                }
-                if (mod.RoundToInteger(mod.RandomReal(0, 5)) < 5) {
+                } else if (mod.RoundToInteger(mod.RandomReal(0, 5)) < 5) {
                     teleportToSpawnObjectiveAndTryVehicle();
+                } else {
+                    this.tryDeployNearbyAIVehicle(150, eventInfo)
                 }
             } else if (isConquestAssaultAttacker) {
                 mod.UndeployPlayer(player)
+            } else {
+                this.tryDeployNearbyAIVehicle(150, eventInfo)
             }
         }
+    }
+
+    async tryDeployNearbyAIVehicle(distance: number, eventInfo: PlayerEventInfo): Promise<void> {
+        const player = eventInfo.eventPlayer;
+        if (!mod.IsPlayerValid(player) || isPlayerInVehicle(player)) return;
+        if (mod.RoundToInteger(mod.RandomReal(0, 1)) !== 1) return;
+
+        await mod.Wait(0.2)
+        if (!mod.IsPlayerValid(player) || isPlayerInVehicle(player)) return;
+
+        const playerPosition = mod.GetObjectPosition(player);
+        const nearbyOpenVehicles = filterModArray(
+            mod.AllVehicles(),
+            (vehicle: any) => mod.CountOf(mod.GetAllPlayersInVehicle(vehicle)) < 2 &&
+                mod.DistanceBetween(
+                    mod.GetVehicleState(vehicle, mod.VehicleStateVector.VehiclePosition),
+                    playerPosition) < distance);
+        this.deployAIVehicle(mod.RandomValueInArray(nearbyOpenVehicles) as mod.Vehicle | undefined, distance, eventInfo)
     }
 
     deployAIVehicle(vehicle: mod.Vehicle | null | undefined, distance: number, eventInfo: PlayerEventInfo): void {
@@ -1810,22 +2001,7 @@ class AIController {
         const player = eventInfo.eventPlayer;
 
         this.spawnAIObjectives(eventInfo)
-        await mod.Wait(0.2)
-
-        if (mod.RoundToInteger(mod.RandomReal(0, 1)) === 0 && mod.IsPlayerValid(player)) {
-            const playerPosition = mod.GetObjectPosition(player);
-            const nearbyOpenVehicles = filterModArray(
-                mod.AllVehicles(),
-                (vehicle: any) => mod.CountOf(mod.GetAllPlayersInVehicle(vehicle)) < 2 &&
-                    mod.DistanceBetween(
-                        mod.GetVehicleState(vehicle, mod.VehicleStateVector.VehiclePosition),
-                        playerPosition) < 150);
-            if (mod.CountOf(nearbyOpenVehicles) > 0) {
-                this.deployAIVehicle(mod.RandomValueInArray(nearbyOpenVehicles) as mod.Vehicle | undefined, 150, eventInfo)
-            }
-        }
-
-        await mod.Wait(0.2)
+        await mod.Wait(1)
         this.startScouting(player)
     }
 
@@ -1865,6 +2041,8 @@ class AIController {
             if (!objective) continue;
 
             const capturePoint = objective.getCapturePoint();
+            if (mod.DistanceBetween(mod.GetObjectPosition(player), mod.GetObjectPosition(capturePoint)) >= 500) continue;
+
             if (sameTeam(playerTeam, mod.GetCurrentOwnerTeam(capturePoint))) {
                 ownedCapturePoints.push(capturePoint);
             } else {
@@ -1874,12 +2052,18 @@ class AIController {
 
         if (enemyOwnedCapturePoints.length === 0) {
             const target = randomArrayValue(ownedCapturePoints);
-            if (!isDefined(target)) return;
+            if (!isDefined(target)) {
+                mod.UndeployPlayer(player)
+                return;
+            }
             playerState.aiTarget = target;
             mod.AIDefendPositionBehavior(player, mod.GetObjectPosition(target), 0, 30)
         } else {
             const target = randomArrayValue(enemyOwnedCapturePoints);
-            if (!isDefined(target)) return;
+            if (!isDefined(target)) {
+                mod.UndeployPlayer(player)
+                return;
+            }
             playerState.aiTarget = target;
             mod.AIMoveToBehavior(player, mod.GetObjectPosition(target))
         }
@@ -1913,9 +2097,7 @@ class ConquestGame {
     }
 
     shouldPlayNearEndMusic(): boolean {
-        return isGameOngoing && (mod.GetMatchTimeRemaining() <= 60 ||
-            getTeamState(TEAM_1).score <= CONFIG.LOW_TICKET_MUSIC_THRESHOLD ||
-            getTeamState(TEAM_2).score <= CONFIG.LOW_TICKET_MUSIC_THRESHOLD);
+        return isGameOngoing && (mod.GetMatchTimeRemaining() <= 60 || endMusicIntensity > 0);
     }
 
     shouldEndGame(): boolean {
@@ -1926,10 +2108,11 @@ class ConquestGame {
 
     async updateScoreTimeAndAI(): Promise<void> {
         uiController.updateScoreboard()
+        this.checkConquestAssaultWin()
         aiController.addAI()
         await mod.Wait(0.1)
         aiController.addAI()
-        this.checkConquestAssaultWin()
+        this.updateNearEndMusic()
     }
 
     async updateScoreTimeAndAISecondaryTick(): Promise<void> {
@@ -1937,24 +2120,33 @@ class ConquestGame {
         aiController.addAI()
         await mod.Wait(0.1)
         aiController.addAI()
+        this.updateNearEndMusic()
     }
 
-    trackScoreAndBleed(): void {
+    updateOwnedFlagCounts(): void {
         const team1State = getTeamState(TEAM_1);
         const team2State = getTeamState(TEAM_2);
-        let team1OwnedCount = 0;
-        let team2OwnedCount = 0;
+        team1State.flagsOwned = 0;
+        team2State.flagsOwned = 0;
 
         for (const objective of objectives) {
             if (!objective) continue;
 
             const ownerTeam = mod.GetCurrentOwnerTeam(objective.getCapturePoint());
             if (sameTeam(ownerTeam, TEAM_1)) {
-                team1OwnedCount += 1;
+                team1State.flagsOwned += 1;
             } else if (sameTeam(ownerTeam, TEAM_2)) {
-                team2OwnedCount += 1;
+                team2State.flagsOwned += 1;
             }
         }
+    }
+
+    trackScoreAndBleed(): void {
+        const team1State = getTeamState(TEAM_1);
+        const team2State = getTeamState(TEAM_2);
+        this.updateOwnedFlagCounts();
+        const team1OwnedCount = team1State.flagsOwned;
+        const team2OwnedCount = team2State.flagsOwned;
 
         if (FLAGS.TOTAL_CONTROL_TICKET_BLEED) {
             const capturePointCount = activeObjectiveCount;
@@ -1986,6 +2178,20 @@ class ConquestGame {
         mod.PlayMusic(mod.MusicEvents.Core_Overtime_Loop)
     }
 
+    updateNearEndMusic(): void {
+        if (!this.shouldPlayNearEndMusic()) return;
+
+        if (mod.GreaterThan(
+            mod.Multiply(mod.Divide(60, mod.GetMatchTimeRemaining()), 4),
+            endMusicIntensity)) {
+            mod.SetMusicParam(
+                mod.MusicParams.Core_Urgency,
+                mod.Subtract(4, mod.Multiply(mod.Divide(mod.GetMatchTimeRemaining(), 60), 4)))
+        } else {
+            mod.SetMusicParam(mod.MusicParams.Core_Urgency, mod.Subtract(4, endMusicIntensity))
+        }
+    }
+
     initGameSettings(): void {
         isGameOngoing = false;
         getTeamState(TEAM_1).startingScore = 2000;
@@ -2005,6 +2211,13 @@ class ConquestGame {
         enemyTextColour = mod.CreateVector(1, 0.2, 0.2);
         enemyBGColour = mod.CreateVector(0.6, 0.1, 0.1);
         isFXResetting = false;
+    }
+
+    setupNightWeaponPackage(): void {
+        nightWeaponPackage = mod.CreateNewWeaponPackage();
+        mod.AddAttachmentToWeaponPackage(mod.WeaponAttachments.Bottom_Flashlight, nightWeaponPackage)
+        mod.AddAttachmentToWeaponPackage(mod.WeaponAttachments.Left_Flashlight, nightWeaponPackage)
+        mod.AddAttachmentToWeaponPackage(mod.WeaponAttachments.Right_Flashlight, nightWeaponPackage)
     }
 
     async setupMap(): Promise<void> {
@@ -2039,6 +2252,10 @@ class ConquestGame {
         mod.SetUnspawnDelayInSeconds(mod.GetSpawner(901), 300)
         mod.SetUnspawnDelayInSeconds(mod.GetSpawner(902), 300)
         uiController.showVersion()
+        this.setupNightWeaponPackage()
+        if (FLAGS.RANDOM_DAY_NIGHT && mod.RoundToInteger(mod.RandomReal(0, 1)) === 1) {
+            nightMode = true;
+        }
 
         audio.vo1 = spawnAudio(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D);
         audio.vo2 = spawnAudio(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D);
@@ -2049,11 +2266,12 @@ class ConquestGame {
         audio.tickSoundTaking = spawnAudio(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickIcon_IsFriendly_OneShot2D);
         audio.tickSoundLosing = spawnAudio(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickEnemy_OneShot2D);
         audio.capturedSound = spawnAudio(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_OnCapturedByFriendly_OneShot2D);
+        audio.neutraliseSound = spawnAudio(mod.RuntimeSpawn_Common.SFX_UI_Gauntlet_Circuit_TerminalFriendlyCapturing_OneShot2D);
         audio.oobSound = spawnAudio(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_OutOfBounds_Countdown_OneShot2D);
 
-        mod.PlayMusic(mod.MusicEvents.Core_LastPhaseBegin)
         mod.LoadMusic(mod.MusicPackages.Core)
         await mod.Wait(2)
+        mod.PlayMusic(mod.MusicEvents.Core_LastPhaseBegin)
         isGameOngoing = true;
         if (FLAGS.CONQUEST_ASSAULT) {
             mod.EnableHQ(mod.GetHQ(2), false)
@@ -2123,25 +2341,14 @@ class ConquestGame {
     }
 
     checkConquestAssaultWin(): void {
-        if (!FLAGS.CONQUEST_ASSAULT || mod.GetMatchTimeElapsed() <= 10) return;
+        if (!FLAGS.CONQUEST_ASSAULT || mod.GetMatchTimeElapsed() <= 120) return;
 
-        let team2OwnsAllObjectives = true;
-        for (const objective of objectives) {
-            if (!objective) continue;
-
-            if (!sameTeam(TEAM_2, mod.GetCurrentOwnerTeam(objective.getCapturePoint()))) {
-                team2OwnsAllObjectives = false;
-                break;
-            }
-        }
-
-        const team2AlivePlayerConditionCount = mod.CountOf(filterModArray(
+        this.updateOwnedFlagCounts();
+        const team2AlivePlayerCount = mod.CountOf(filterModArray(
             mod.AllPlayers(),
-            (currentArrayElement: any) => mod.NotEqualTo(
-                mod.Equals(mod.GetTeam(2), mod.GetTeam(currentArrayElement)),
-                isAlivePlayer(currentArrayElement))));
+            (currentArrayElement: any) => sameTeam(TEAM_2, mod.GetTeam(currentArrayElement)) && isAlivePlayer(currentArrayElement)));
 
-        if (team2OwnsAllObjectives && team2AlivePlayerConditionCount === 0) {
+        if (getTeamState(TEAM_2).flagsOwned === 0 && team2AlivePlayerCount === 0) {
             getTeamState(TEAM_2).score = 0;
         }
     }
@@ -2188,7 +2395,6 @@ class ConquestGame {
             mod.SetMusicParam(mod.MusicParams.Core_IsWinning, 1, mod.GetTeam(2))
         } else {
         }
-        mod.PlayMusic(mod.MusicEvents.Core_EndOfRound_Loop)
         scorePositionLeft = mod.CreateVector(-300, 385, 0);
         scorePositionRight = mod.CreateVector(300, 385, 0);
         uiController.updateScoreboard()
@@ -2197,6 +2403,10 @@ class ConquestGame {
         uiController.showEndGameUI("Team1ScoreRight", scorePositionRight)
         uiController.showEndGameUI("Team2ScoreLeft", scorePositionLeft)
         uiController.showEndGameUI("Team2ScoreRight", scorePositionRight)
+        mod.SetUIWidgetBgColor(mod.FindUIWidgetWithName("container2"), mod.CreateVector(0, 0, 0))
+        mod.SetUIWidgetBgAlpha(mod.FindUIWidgetWithName("container2"), 0.5)
+        mod.SetUIWidgetBgFill(mod.FindUIWidgetWithName("container2"), mod.UIBgFill.Solid)
+        mod.PlayMusic(mod.MusicEvents.Core_EndOfRound_Loop)
         await mod.Wait(4)
         if (mod.GreaterThan(
             getTeamState(TEAM_1).score,
@@ -2209,6 +2419,8 @@ class ConquestGame {
         } else {
             mod.EndGameMode(mod.GetTeam(0))
         }
+        await mod.Wait(1.8)
+        mod.SetCameraTypeForAll(mod.Cameras.Fixed, 950)
     }
 }
 
@@ -2300,6 +2512,14 @@ function addEquipmentRule(eventInfo: PlayerEventInfo) {
     }
 }
 
+function undeployIfSpawnedOOBRule(eventInfo: PlayerEventInfo) {
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.UndeployIfSpawnedOOB);
+    const state = true;
+    if (condition.update(state)) {
+        playerController.undeployIfSpawnedOutOfBounds(eventInfo);
+    }
+}
+
 function handlePlayerJoinRule(eventInfo: PlayerEventInfo) {
     const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HandlePlayerJoin);
     const state = true;
@@ -2324,11 +2544,11 @@ function handleCapturePointCapturedRule(eventInfo: CapturePointEventInfo) {
     }
 }
 
-function notifyCaptureRule(eventInfo: CapturePointEventInfo) {
-    const condition = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.NotifyCapture);
-    const state = capturePointController.shouldNotifyCapture(eventInfo);
+function capturePointLostRule(eventInfo: CapturePointEventInfo) {
+    const condition = getCapturePointCondition(eventInfo.eventCapturePoint, CapturePointConditionSlot.HandleLost);
+    const state = true;
     if (condition.update(state)) {
-        capturePointController.onCapturing(eventInfo);
+        capturePointController.onLostNeutralised(eventInfo);
     }
 }
 
@@ -2396,6 +2616,14 @@ function enterAreaTriggerRule(eventInfo: { eventPlayer: mod.Player; eventAreaTri
     }
 }
 
+function enterInvisibleWallTriggerRule(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }) {
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.EnterInvisibleWallTrigger);
+    const state = playerController.shouldEnterInvisibleWallTrigger(eventInfo);
+    if (condition.update(state)) {
+        playerController.enterInvisibleWallTrigger(eventInfo);
+    }
+}
+
 function exitAreaTriggerRule(eventInfo: { eventPlayer: mod.Player; eventAreaTrigger: mod.AreaTrigger }) {
     const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.ExitAreaTrigger);
     const state = playerController.shouldExitAreaTrigger(eventInfo);
@@ -2452,9 +2680,9 @@ function runCaptureProgressRule(eventInfo: CapturePointEventInfo) {
     }
 }
 
-function aiScoutOnDeployRule(eventInfo: PlayerEventInfo) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIScoutOnDeploy);
-    const state = aiController.shouldScoutOnDeploy(eventInfo);
+function aiScoutOnSpawnerSpawnedRule(eventInfo: PlayerEventInfo) {
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIScoutOnSpawnerSpawned);
+    const state = true;
     if (condition.update(state)) {
         aiController.deployScout(eventInfo);
     }
@@ -2505,6 +2733,14 @@ function aiRetryMoveRule(eventInfo: PlayerEventInfo) {
     const state = aiController.shouldRetryMove(eventInfo);
     if (condition.update(state)) {
         aiController.retryMove(eventInfo);
+    }
+}
+
+function aiMoveSucceededRule(eventInfo: PlayerEventInfo) {
+    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIMoveSucceeded);
+    const state = aiController.shouldMoveSucceeded(eventInfo);
+    if (condition.update(state)) {
+        aiController.moveSucceeded(eventInfo);
     }
 }
 
@@ -2577,8 +2813,7 @@ export function OnPlayerDeployed(eventPlayer: mod.Player) {
     updatePlayerTeam(eventPlayer);
     const eventInfo = { eventPlayer };
     addEquipmentRule(eventInfo);
-    aiScoutOnDeployRule(eventInfo);
-    aiReadyForAttackRule(eventInfo);
+    undeployIfSpawnedOOBRule(eventInfo);
 }
 
 export function OnPlayerJoinGame(eventPlayer: mod.Player) {
@@ -2601,10 +2836,10 @@ export function OnCapturePointCaptured(eventCapturePoint: mod.CapturePoint) {
     handleCapturePointCapturedRule(eventInfo);
 }
 
-export function OnCapturePointCapturing(eventCapturePoint: mod.CapturePoint) {
+export function OnCapturePointLost(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint };
-    notifyCaptureRule(eventInfo);
+    capturePointLostRule(eventInfo);
 }
 
 export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint) {
@@ -2630,6 +2865,7 @@ export function OnPlayerEnterAreaTrigger(eventPlayer: mod.Player, eventAreaTrigg
     ensureStateInitialized();
     const eventInfo = { eventPlayer, eventAreaTrigger };
     enterAreaTriggerRule(eventInfo);
+    enterInvisibleWallTriggerRule(eventInfo);
 }
 
 export function OnPlayerExitAreaTrigger(eventPlayer: mod.Player, eventAreaTrigger: mod.AreaTrigger) {
@@ -2642,6 +2878,14 @@ export function OngoingCapturePoint(eventCapturePoint: mod.CapturePoint) {
     ensureStateInitialized();
     const eventInfo = { eventCapturePoint: eventCapturePoint };
     runCaptureProgressRule(eventInfo);
+}
+
+export function OnSpawnerSpawned(eventPlayer: mod.Player, eventSpawner: mod.Spawner) {
+    ensureStateInitialized();
+    updatePlayerTeam(eventPlayer);
+    const eventInfo = { eventPlayer };
+    aiScoutOnSpawnerSpawnedRule(eventInfo);
+    aiReadyForAttackRule(eventInfo);
 }
 
 export function OnPlayerDamaged(eventPlayer: mod.Player, eventOtherPlayer: mod.Player, eventDamageType: mod.DamageType, eventWeaponUnlock: mod.WeaponUnlock) {
@@ -2666,6 +2910,12 @@ export function OnAIMoveToFailed(eventPlayer: mod.Player) {
     ensureStateInitialized();
     const eventInfo = { eventPlayer };
     aiRetryMoveRule(eventInfo);
+}
+
+export function OnAIMoveToSucceeded(eventPlayer: mod.Player) {
+    ensureStateInitialized();
+    const eventInfo = { eventPlayer };
+    aiMoveSucceededRule(eventInfo);
 }
 
 export function OnPlayerLeaveGame(eventNumber: number) {
