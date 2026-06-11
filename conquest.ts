@@ -252,6 +252,8 @@ class Objective {
     private conditionStore: Conditions | null = null;
 
     progress = 0;
+    lastOwnerTeamId = -999;
+    uiSyncTick = 0;
     uiSize = mod.CreateVector(0, 7, 0);
     uiPosition = mod.CreateVector(-110, 200, 0);
 
@@ -1553,8 +1555,8 @@ class CapturePointController {
 
     async onCaptured(eventInfo: CapturePointEventInfo): Promise<void> {
         await mod.Wait(0.2)
+        this.refreshObjectiveState(eventInfo.eventCapturePoint, true)
         uiController.updateScoreboard()
-        uiController.updateFlagIcons()
         const playersOnObjective = filterModArray(
             mod.GetPlayersOnPoint(eventInfo.eventCapturePoint),
             (currentArrayElement: any) => mod.Equals(
@@ -1587,14 +1589,26 @@ class CapturePointController {
         if (!cpState) return;
 
         cpState.progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+        cpState.lastOwnerTeamId = mod.GetObjId(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint));
         cpState.setProgressVisuals(cpState.progress);
+        this.refreshObjectiveState(eventInfo.eventCapturePoint, true)
         while (true) {
+            const currentProgress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+            const currentOwnerTeamId = mod.GetObjId(mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint));
+            cpState.uiSyncTick += 1;
+            const progressChanged = mod.NotEqualTo(cpState.progress, currentProgress);
+            const ownerChanged = cpState.lastOwnerTeamId !== currentOwnerTeamId;
+            const periodicSync = cpState.uiSyncTick >= 3;
+
             uiController.flashCaptureProgressUI(eventInfo.eventCapturePoint, capturePointFlash)
-            if (mod.NotEqualTo(cpState.progress, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
-                cpState.setProgressVisuals(mod.GetCaptureProgress(eventInfo.eventCapturePoint));
-                uiController.manageCapturePointUI(eventInfo.eventCapturePoint, cpState.progress, eventInfo)
+            if (progressChanged || ownerChanged || periodicSync) {
+                this.refreshObjectiveState(eventInfo.eventCapturePoint, ownerChanged)
+                if (periodicSync) {
+                    cpState.uiSyncTick = 0;
+                }
             }
-            cpState.progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+            cpState.progress = currentProgress;
+            cpState.lastOwnerTeamId = currentOwnerTeamId;
             await mod.Wait(0.1)
         }
     }
@@ -1602,6 +1616,7 @@ class CapturePointController {
     async onLostNeutralised(eventInfo: CapturePointEventInfo): Promise<void> {
         uiController.updateFlagIcons()
         await mod.Wait(0.2)
+        this.refreshObjectiveState(eventInfo.eventCapturePoint, true)
         uiController.updateScoreboard()
 
         const neutralisingTeam = mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint);
@@ -1661,6 +1676,29 @@ class CapturePointController {
         this.updatePlayersOnPointForTeam(capturePoint, teamState.otherTeam, playersOnPoint);
     }
 
+    private updateAllPlayersOnPointCounts(capturePoint: mod.CapturePoint): void {
+        const playersOnPoint = mod.GetPlayersOnPoint(capturePoint);
+        this.updatePlayersOnPointForTeam(capturePoint, TEAM_1, playersOnPoint);
+        this.updatePlayersOnPointForTeam(capturePoint, TEAM_2, playersOnPoint);
+    }
+
+    private refreshObjectiveState(capturePoint: mod.CapturePoint, forceFlagIconUpdate = false): void {
+        const objective = getObjectiveState(capturePoint);
+        const oldProgress = objective.progress;
+        const currentProgress = mod.GetCaptureProgress(capturePoint);
+        const ownerTeamId = mod.GetObjId(mod.GetCurrentOwnerTeam(capturePoint));
+
+        this.updateAllPlayersOnPointCounts(capturePoint);
+        objective.setProgressVisuals(currentProgress);
+        uiController.manageCapturePointUI(capturePoint, oldProgress, { eventCapturePoint: capturePoint })
+
+        if (forceFlagIconUpdate || objective.lastOwnerTeamId !== ownerTeamId) {
+            uiController.updateFlagIcons()
+        }
+        objective.progress = currentProgress;
+        objective.lastOwnerTeamId = ownerTeamId;
+    }
+
     private updatePlayersOnPointForTeam(capturePoint: mod.CapturePoint, team: mod.Team, playersOnPoint = mod.GetPlayersOnPoint(capturePoint)): void {
         getObjectiveState(capturePoint).setPlayersOnPoint(team, this.countAlivePlayersOnPointForTeam(playersOnPoint, team))
     }
@@ -1677,17 +1715,15 @@ class CapturePointController {
         const player = eventInfo.eventPlayer;
         const capturePoint = eventInfo.eventCapturePoint;
         const playerState = getPlayerState(player);
-        const playerTeam = playerState.team;
 
         playerState.currentCapturePoint = capturePoint;
         playerState.capturePointState = mod.GetCaptureProgress(capturePoint);
         playerState.flagOwner = mod.GetTeam(3);
 
-        this.updatePlayersOnPointCounts(capturePoint, playerTeam);
         drawnUICount += 1;
 
         await mod.Wait(0.05)
-        uiController.manageCapturePointUI(capturePoint, playerState.capturePointState, eventInfo)
+        this.refreshObjectiveState(capturePoint)
         playerState.captureSessionActive = true;
         getPlayerCondition(player, PlayerConditionSlot.ShowCaptureUI).update(false);
 
@@ -1716,7 +1752,7 @@ class CapturePointController {
 
     hideCaptureUI(eventInfo: PlayerCapturePointEventInfo): void {
         const playerState = getPlayerState(eventInfo.eventPlayer);
-        this.updatePlayersOnPointForTeam(eventInfo.eventCapturePoint, playerState.team);
+        this.refreshObjectiveState(eventInfo.eventCapturePoint)
         this.refreshCaptureUIForPlayerObjective(eventInfo.eventPlayer);
         playerState.captureSessionActive = false;
         getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.HideCaptureUI).update(false);
@@ -1734,14 +1770,14 @@ class CapturePointController {
     updatePlayerCountOnDeath(eventInfo: PlayerEventInfo): void {
         const playerState = getPlayerState(eventInfo.eventPlayer);
         if (!isDefined(playerState.currentCapturePoint)) return;
-        this.updatePlayersOnPointForTeam(playerState.currentCapturePoint, playerState.team);
+        this.refreshObjectiveState(playerState.currentCapturePoint)
         this.refreshCaptureUIForPlayerObjective(eventInfo.eventPlayer);
     }
 
     updatePlayerCountOnRevive(eventInfo: PlayerEventInfo): void {
         const playerState = getPlayerState(eventInfo.eventPlayer);
         if (!isDefined(playerState.currentCapturePoint)) return;
-        this.updatePlayersOnPointForTeam(playerState.currentCapturePoint, playerState.team);
+        this.refreshObjectiveState(playerState.currentCapturePoint)
         this.refreshCaptureUIForPlayerObjective(eventInfo.eventPlayer);
     }
 }
