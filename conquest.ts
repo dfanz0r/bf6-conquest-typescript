@@ -2,34 +2,65 @@
 // CONFIG
 // ============================================================
 
+// Portal template reference links:
+// - Tutorial: https://youtu.be/DjimxXccEHY
+// - Code deep dive: https://youtu.be/DwC6l0i5fuQ?si=NQrM78Svog99bMYg
+
 const CONFIG = {
+    // Portal text: set the game time limit.
     TIME_LIMIT: 2700,
     STARTING_SCORE: 1500,
+    // Portal text: set Conquest Assault starting tickets.
     CONQUEST_ASSAULT_TEAM_1_SCORE: 2000,
     CONQUEST_ASSAULT_TEAM_2_SCORE: 1500,
+    // Portal text: sets objective capture time.
     FLAG_CAPTURE_TIME: 15,
+    // Portal text: sets objective neutralisation time.
     FLAG_NEUTRAL_TIME: 20,
+    // Portal text: seconds between flag bleed; higher is slower.
     TICKET_BLEED_SPEED: 2,
+    // Portal text: how many tickets are removed when in total control.
     TOTAL_CONTROL_BONUS: 10,
+    // Portal text: close-finish music turns on at this ticket count.
     LOW_TICKET_MUSIC_THRESHOLD: 100,
+    // Portal note: bots behave like backfill, filling unused server slots up to the configured cap.
+    // The Portal template notes a maximum supported value of 100, recommends 60 or less for performance,
+    // and suggests mixing static bots with custom bots for better PvE performance.
     MAX_CUSTOM_AI: 36,
     INVISIBLE_WALL_TRIGGER_ID: 1500
 } as const;
 
 const FLAGS = {
+    // Portal text: toggle this to enable/disable custom bots.
     ENABLE_CUSTOM_AI: true,
+    // Portal text: toggle this to enable/disable team switching.
     ENABLE_TEAM_SWITCHING: true,
+    // Portal text: toggle the header UI; disable for hardcore.
     ENABLE_HEADER_UI: true,
+    // Portal text: bleed tickets only when a team has fewer flags.
     LOSER_ONLY_TICKET_BLEED: true,
+    // Portal text: bleed bonus tickets when all flags are held by one team.
     TOTAL_CONTROL_TICKET_BLEED: true,
+    // Portal text: toggle if player deaths remove tickets.
     PLAYER_DEATHS_BLEED: true,
+    // Portal text: enables the voice-over announcer.
     ENABLE_VO: true,
+    // Portal text: adds snow to all maps.
     ENABLE_SNOW: false,
+    // Portal text: randomise day/night.
     RANDOM_DAY_NIGHT: false,
+    // Portal text: enables night on all maps; overrides random.
     NIGHT_MODE: false,
+    // Portal text: gives players night vision goggles.
     GIVE_PLAYERS_NVG: false,
+    // Portal text: gives players gas mask.
     GIVE_PLAYERS_GAS_MASK: false,
+    // Portal note: Conquest Assault makes Team 2 own all flags and disables HQ ObjID 2 by default.
+    // If Team 2 loses all flags and has no spawns left, Team 1 wins by default. With default bots,
+    // the template recommends deleting the HQ from the spatial data because bots ignore disabled HQs.
+    // Portal text: enables Conquest Assault logic.
     CONQUEST_ASSAULT: false,
+    // Portal text: adds colour filters - only choose one.
     BF3_COLOUR_FILTER: false,
     BF4_COLOUR_FILTER: false,
     SNOW_COLOUR_FILTER: false
@@ -344,6 +375,8 @@ class Objective {
 const playerStates = new Map<number, PlayerState>();
 const teamStates = new Map<number, TeamState>();
 const OBJECTIVE_ID_BASE = 200;
+// Portal note: map detection is not available, so objective and vehicle-spawner IDs use flag-based ranges:
+// A = capture point 200, spawners 600-609; B = 201, spawners 610-619; C = 202, spawners 620-629; etc.
 const objectives: Array<Objective | null> = [
     new Objective(0, 200, "A", mod.VoiceOverFlags.Alpha, 600, 601),
     new Objective(1, 201, "B", mod.VoiceOverFlags.Bravo, 610, 611),
@@ -1920,6 +1953,7 @@ class PlayerController {
 
 class CapturePointController {
     setupCapturePoint(cp: mod.CapturePoint): void {
+        // Portal comment: this activates all objective capture points.
         mod.SetCapturePointCapturingTime(cp, CONFIG.FLAG_CAPTURE_TIME);
         mod.SetCapturePointNeutralizationTime(cp, CONFIG.FLAG_NEUTRAL_TIME);
         mod.EnableGameModeObjective(cp, true);
@@ -2028,6 +2062,8 @@ class CapturePointController {
     }
 
     spawnObjectiveVehicles(eventInfo: CapturePointEventInfo): void {
+        // Portal comment: add capture-point vehicle spawns by setting the map, capture-point Obj ID,
+        // and vehicle-spawner Obj ID in the objective registry above.
         const objective = getObjectiveByCapturePoint(eventInfo.eventCapturePoint);
         if (!objective || !objective.hasVehicleSpawners()) return;
 
@@ -2765,6 +2801,9 @@ class ConquestGame {
     }
 
     async resetFX(eventInfo: PlayerEventInfo): Promise<void> {
+        // Portal note: players joining mid-game may see stale render FX. The workaround is to disable and
+        // re-enable FX, but doing all FX at once hurts client performance. Process them in blocks of five
+        // with a 66ms delay to give the client time to update while minimizing impact on UI and other elements.
         while (isFXResetting) {
             await mod.Wait(1);
         }
