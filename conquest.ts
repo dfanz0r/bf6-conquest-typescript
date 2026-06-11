@@ -87,28 +87,6 @@ let snowVolume: mod.SpatialObject | null = null;
 
 // Static Arrays
 
-const flagAnnounce: mod.VoiceOverFlags[] = [
-    mod.VoiceOverFlags.Alpha,
-    mod.VoiceOverFlags.Bravo,
-    mod.VoiceOverFlags.Charlie,
-    mod.VoiceOverFlags.Delta,
-    mod.VoiceOverFlags.Echo,
-    mod.VoiceOverFlags.Foxtrot,
-    mod.VoiceOverFlags.Golf,
-    mod.VoiceOverFlags.Hotel,
-    mod.VoiceOverFlags.India,
-];
-
-const flagLetters: string[] = [
-    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-    "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-];
-
-const team1ObjectiveTextUI = flagLetters.map((letter) => letter + "1");
-const team2ObjectiveTextUI = flagLetters.map((letter) => letter + "2");
-const team1ObjectiveOutlineUI = flagLetters.map((letter) => letter + "3");
-const team2ObjectiveOutlineUI = flagLetters.map((letter) => letter + "4");
-
 const botNames: string[] = [
     "andy6170 (Bot)",
     "TheOzzy (Bot)",
@@ -221,79 +199,52 @@ class TeamState {
     score = 0;
     startingScore = 0;
 
-    playersOnPoints = new Map<number, number>();
-    capTextColours = new Map<number, mod.Vector>();
-    capBGColours = new Map<number, mod.Vector>();
-    capMessages = new Map<number, string>();
-    capProgressColours = new Map<number, mod.Vector>();
-
     constructor(
         public team: mod.Team,
         public otherTeam: mod.Team,
     ) {}
-
-    playersOnPoint(cpId: number): number {
-        return this.playersOnPoints.get(cpId) ?? 0;
-    }
-
-    capTextColour(cpId: number): mod.Vector {
-        return this.capTextColours.get(cpId) ?? mod.CreateVector(1, 1, 1);
-    }
-
-    capBGColour(cpId: number): mod.Vector {
-        return this.capBGColours.get(cpId) ?? mod.CreateVector(0, 0, 0);
-    }
-
-    capMessage(cpId: number): string {
-        return this.capMessages.get(cpId) ?? "";
-    }
-
-    capProgressColour(cpId: number): mod.Vector {
-        return this.capProgressColours.get(cpId) ?? mod.CreateVector(0, 0, 0);
-    }
 }
 
 // Objective State
+
+class ObjectiveTeamState {
+    playersOnPoint = 0;
+    capTextColour = mod.CreateVector(1, 1, 1);
+    capBGColour = mod.CreateVector(0, 0, 0);
+    capMessage = "";
+    capProgressColour = mod.CreateVector(0, 0, 0);
+}
 
 class Objective {
     private capturePoint: mod.CapturePoint | null = null;
     private team1VehicleSpawner: mod.VehicleSpawner | null = null;
     private team2VehicleSpawner: mod.VehicleSpawner | null = null;
 
+    readonly team1State = new ObjectiveTeamState();
+    readonly team2State = new ObjectiveTeamState();
+    readonly team1TextUI: string;
+    readonly team2TextUI: string;
+    readonly team1OutlineUI: string;
+    readonly team2OutlineUI: string;
+
+    private conditionStore: Conditions | null = null;
+
     progress = 0;
     uiSize = mod.CreateVector(0, 7, 0);
     uiPosition = mod.CreateVector(-110, 200, 0);
-    conditions = new Conditions(CapturePointConditionSlot.Count);
 
     constructor(
         public readonly index: number,
         public readonly id: number,
+        public readonly letter: string,
+        public readonly voiceFlag: mod.VoiceOverFlags | null,
         private readonly team1VehicleSpawnerId: number | null,
         private readonly team2VehicleSpawnerId: number | null,
-    ) {}
-
-    get letter(): string {
-        return flagLetters[this.index];
-    }
-
-    get voiceFlag(): mod.VoiceOverFlags | null {
-        return flagAnnounce[this.index] ?? null;
-    }
-
-    get team1TextUI(): string {
-        return team1ObjectiveTextUI[this.index];
-    }
-
-    get team2TextUI(): string {
-        return team2ObjectiveTextUI[this.index];
-    }
-
-    get team1OutlineUI(): string {
-        return team1ObjectiveOutlineUI[this.index];
-    }
-
-    get team2OutlineUI(): string {
-        return team2ObjectiveOutlineUI[this.index];
+    ) {
+        this.team1TextUI = letter + "1";
+        this.team2TextUI = letter + "2";
+        this.team1OutlineUI = letter + "3";
+        this.team2OutlineUI = letter + "4";
     }
 
     setCapturePoint(capturePoint: mod.CapturePoint): void {
@@ -339,6 +290,25 @@ class Objective {
         return null;
     }
 
+    get conditions(): Conditions {
+        if (!isDefined(this.conditionStore)) {
+            this.conditionStore = new Conditions(CapturePointConditionSlot.Count);
+        }
+        return this.conditionStore;
+    }
+
+    getTeamState(team: mod.Team): ObjectiveTeamState {
+        return sameTeam(team, TEAM_2) ? this.team2State : this.team1State;
+    }
+
+    setPlayersOnPoint(team: mod.Team, count: number): void {
+        this.getTeamState(team).playersOnPoint = count;
+    }
+
+    playersOnPoint(team: mod.Team): number {
+        return this.getTeamState(team).playersOnPoint;
+    }
+
     setProgressVisuals(progress: number): void {
         const width = mod.Floor(mod.Multiply(220, progress));
         this.uiSize = mod.CreateVector(width, 7, 0);
@@ -356,34 +326,35 @@ const playerStates = new Map<number, PlayerState>();
 const teamStates = new Map<number, TeamState>();
 const OBJECTIVE_ID_BASE = 200;
 const objectives: Array<Objective | null> = [
-    new Objective(0, 200, 600, 601),
-    new Objective(1, 201, 610, 611),
-    new Objective(2, 202, 620, 621),
-    new Objective(3, 203, 630, 631),
-    new Objective(4, 204, 640, 641),
-    new Objective(5, 205, null, null),
-    new Objective(6, 206, null, null),
-    new Objective(7, 207, null, null),
-    new Objective(8, 208, null, null),
-    new Objective(9, 209, null, null),
-    new Objective(10, 210, null, null),
-    new Objective(11, 211, null, null),
-    new Objective(12, 212, null, null),
-    new Objective(13, 213, null, null),
-    new Objective(14, 214, null, null),
-    new Objective(15, 215, null, null),
-    new Objective(16, 216, null, null),
-    new Objective(17, 217, null, null),
-    new Objective(18, 218, null, null),
-    new Objective(19, 219, null, null),
-    new Objective(20, 220, null, null),
-    new Objective(21, 221, null, null),
-    new Objective(22, 222, null, null),
-    new Objective(23, 223, null, null),
-    new Objective(24, 224, null, null),
-    new Objective(25, 225, null, null),
+    new Objective(0, 200, "A", mod.VoiceOverFlags.Alpha, 600, 601),
+    new Objective(1, 201, "B", mod.VoiceOverFlags.Bravo, 610, 611),
+    new Objective(2, 202, "C", mod.VoiceOverFlags.Charlie, 620, 621),
+    new Objective(3, 203, "D", mod.VoiceOverFlags.Delta, 630, 631),
+    new Objective(4, 204, "E", mod.VoiceOverFlags.Echo, 640, 641),
+    new Objective(5, 205, "F", mod.VoiceOverFlags.Foxtrot, null, null),
+    new Objective(6, 206, "G", mod.VoiceOverFlags.Golf, null, null),
+    new Objective(7, 207, "H", mod.VoiceOverFlags.Hotel, null, null),
+    new Objective(8, 208, "I", mod.VoiceOverFlags.India, null, null),
+    new Objective(9, 209, "J", null, null, null),
+    new Objective(10, 210, "K", null, null, null),
+    new Objective(11, 211, "L", null, null, null),
+    new Objective(12, 212, "M", null, null, null),
+    new Objective(13, 213, "N", null, null, null),
+    new Objective(14, 214, "O", null, null, null),
+    new Objective(15, 215, "P", null, null, null),
+    new Objective(16, 216, "Q", null, null, null),
+    new Objective(17, 217, "R", null, null, null),
+    new Objective(18, 218, "S", null, null, null),
+    new Objective(19, 219, "T", null, null, null),
+    new Objective(20, 220, "U", null, null, null),
+    new Objective(21, 221, "V", null, null, null),
+    new Objective(22, 222, "W", null, null, null),
+    new Objective(23, 223, "X", null, null, null),
+    new Objective(24, 224, "Y", null, null, null),
+    new Objective(25, 225, "Z", null, null, null),
 ];
 let activeObjectiveCount = 0;
+let objectivesInitialized = false;
 
 function getObjectiveById(objectiveId: number): Objective | null {
     const objectiveOffset = objectiveId - OBJECTIVE_ID_BASE;
@@ -402,10 +373,13 @@ function getFirstObjective(): Objective | null {
     return null;
 }
 
-function initObjectiveRegistry(allCapturePoints: mod.Array): void {
+function initObjectiveRegistry(allCapturePoints: mod.Array): boolean {
+    const capturePointCount = mod.CountOf(allCapturePoints);
+    if (capturePointCount === 0) return false;
+
     const activeOffsets = new Set<number>();
 
-    for (let i = 0; i < mod.CountOf(allCapturePoints); i++) {
+    for (let i = 0; i < capturePointCount; i++) {
         const capturePoint = mod.ValueInArray(allCapturePoints, i) as mod.CapturePoint;
         const objectiveId = mod.GetObjId(capturePoint);
         const objectiveOffset = objectiveId - OBJECTIVE_ID_BASE;
@@ -424,6 +398,7 @@ function initObjectiveRegistry(allCapturePoints: mod.Array): void {
             objectives[i] = null;
         }
     }
+    return true;
 }
 
 function getPlayerState(player: mod.Player): PlayerState {
@@ -511,31 +486,44 @@ const teamById = new Map<number, mod.Team>();
 const playerById = new Map<number, mod.Player>();
 
 function ensureStateInitialized(): void {
-    if (stateInitialized || stateInitializing) return;
+    if ((stateInitialized && objectivesInitialized) || stateInitializing) return;
     stateInitializing = true;
 
     try {
-        TEAM_NEUTRAL = mod.GetTeam(0);
-        TEAM_1 = mod.GetTeam(1);
-        TEAM_2 = mod.GetTeam(2);
+        if (!stateInitialized) {
+            TEAM_NEUTRAL = mod.GetTeam(0);
+            TEAM_1 = mod.GetTeam(1);
+            TEAM_2 = mod.GetTeam(2);
 
-        teamById.set(mod.GetObjId(TEAM_NEUTRAL), TEAM_NEUTRAL);
-        teamById.set(mod.GetObjId(TEAM_1), TEAM_1);
-        teamById.set(mod.GetObjId(TEAM_2), TEAM_2);
+            teamById.set(mod.GetObjId(TEAM_NEUTRAL), TEAM_NEUTRAL);
+            teamById.set(mod.GetObjId(TEAM_1), TEAM_1);
+            teamById.set(mod.GetObjId(TEAM_2), TEAM_2);
 
-        const allCPs = mod.AllCapturePoints();
-        initObjectiveRegistry(allCPs);
+            initRuntimeValues();
+            initTeams();
+            stateInitialized = true;
+        }
 
-        initRuntimeValues();
-        initTeams();
-
-        stateInitialized = true;
+        if (!objectivesInitialized) {
+            tryInitializeObjectives();
+        }
     } finally {
         stateInitializing = false;
     }
 }
 
 // --- 1j. Initialization Functions ---
+
+function tryInitializeObjectives(): boolean {
+    objectivesInitialized = initObjectiveRegistry(mod.AllCapturePoints());
+    return objectivesInitialized;
+}
+
+async function waitForObjectiveRegistry(): Promise<void> {
+    while (!objectivesInitialized && !tryInitializeObjectives()) {
+        await mod.Wait(0.1)
+    }
+}
 
 function initRuntimeValues(): void {
     isGameOngoing = false;
@@ -783,11 +771,10 @@ class UIController {
         const playerRoot = getPlayerRootWidget(player);
         const objText = mod.FindUIWidgetWithName("ObjText", playerRoot);
         const objCounter = mod.FindUIWidgetWithName("ObjCounter", playerRoot);
+        const objective = getObjectiveState(eventInfo.eventCapturePoint);
         const teamState = getTeamState(playerState.team);
-        const otherTeamState = getTeamState(teamState.otherTeam);
-        const capturePointId = mod.GetObjId(eventInfo.eventCapturePoint);
-        const teamPlayersOnPoint = teamState.playersOnPoints.get(capturePointId) ?? 0;
-        const enemyPlayersOnPoint = otherTeamState.playersOnPoints.get(capturePointId) ?? 0;
+        const teamPlayersOnPoint = objective.playersOnPoint(playerState.team);
+        const enemyPlayersOnPoint = objective.playersOnPoint(teamState.otherTeam);
 
         mod.SetUITextLabel(objText, mod.Message(label))
         mod.SetUITextLabel(objCounter, mod.Message("{} - {}", teamPlayersOnPoint, enemyPlayersOnPoint))
@@ -858,72 +845,51 @@ class UIController {
     }
 
     manageCapturePointUI(flag: mod.CapturePoint, oldProgress: number, eventInfo: CapturePointEventInfo): void {
-        if (mod.Equals(
-            mod.GetCurrentOwnerTeam(flag),
-            mod.GetTeam(1))) {
-            getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(flag), friendlyTextColour)
-            getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(flag), friendlyBGColour)
-            getTeamState(TEAM_2).capTextColours.set(mod.GetObjId(flag), enemyTextColour)
-            getTeamState(TEAM_2).capBGColours.set(mod.GetObjId(flag), enemyBGColour)
-        } else if (mod.Equals(
-            mod.GetCurrentOwnerTeam(flag),
-            mod.GetTeam(2))) {
-            getTeamState(TEAM_2).capTextColours.set(mod.GetObjId(flag), friendlyTextColour)
-            getTeamState(TEAM_2).capBGColours.set(mod.GetObjId(flag), friendlyBGColour)
-            getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(flag), enemyTextColour)
-            getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(flag), enemyBGColour)
+        const objective = getObjectiveState(flag);
+        const team1ObjectiveState = objective.team1State;
+        const team2ObjectiveState = objective.team2State;
+        const ownerTeam = mod.GetCurrentOwnerTeam(flag);
+        const ownerProgressTeam = mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint);
+        const captureProgress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+
+        if (sameTeam(ownerTeam, TEAM_1)) {
+            team1ObjectiveState.capTextColour = friendlyTextColour;
+            team1ObjectiveState.capBGColour = friendlyBGColour;
+            team2ObjectiveState.capTextColour = enemyTextColour;
+            team2ObjectiveState.capBGColour = enemyBGColour;
+        } else if (sameTeam(ownerTeam, TEAM_2)) {
+            team2ObjectiveState.capTextColour = friendlyTextColour;
+            team2ObjectiveState.capBGColour = friendlyBGColour;
+            team1ObjectiveState.capTextColour = enemyTextColour;
+            team1ObjectiveState.capBGColour = enemyBGColour;
         } else {
-            getTeamState(TEAM_1).capTextColours.set(mod.GetObjId(flag), mod.CreateVector(1, 1, 1))
-            getTeamState(TEAM_1).capBGColours.set(mod.GetObjId(flag), mod.CreateVector(0, 0, 0))
-            getTeamState(TEAM_2).capTextColours.set(mod.GetObjId(flag), mod.CreateVector(1, 1, 1))
-            getTeamState(TEAM_2).capBGColours.set(mod.GetObjId(flag), mod.CreateVector(0, 0, 0))
+            team1ObjectiveState.capTextColour = mod.CreateVector(1, 1, 1);
+            team1ObjectiveState.capBGColour = mod.CreateVector(0, 0, 0);
+            team2ObjectiveState.capTextColour = mod.CreateVector(1, 1, 1);
+            team2ObjectiveState.capBGColour = mod.CreateVector(0, 0, 0);
         }
-        if (mod.LessThan(
-            mod.GetCaptureProgress(mod.GetCapturePoint(mod.GetObjId(flag))),
-            1)) {
-            if (mod.Equals(
-                mod.GetOwnerProgressTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(1))) {
-                if (mod.GreaterThan(
-                    mod.GetCaptureProgress(eventInfo.eventCapturePoint),
-                    oldProgress)) {
-                    getTeamState(TEAM_1).capMessages.set(mod.GetObjId(flag), "CAPTURING")
-                    getTeamState(TEAM_2).capMessages.set(mod.GetObjId(flag), "LOSING")
-                } else if (mod.LessThan(
-                    mod.GetCaptureProgress(eventInfo.eventCapturePoint),
-                    oldProgress)) {
-                    getTeamState(TEAM_1).capMessages.set(mod.GetObjId(flag), "LOSING")
-                    getTeamState(TEAM_2).capMessages.set(mod.GetObjId(flag), "CAPTURING")
-                } else {
-                    getTeamState(TEAM_1).capMessages.set(mod.GetObjId(flag), "CONTESTED")
-                    getTeamState(TEAM_2).capMessages.set(mod.GetObjId(flag), "CONTESTED")
-                }
+
+        if (captureProgress < 1) {
+            const progressIncreasing = captureProgress > oldProgress;
+            const progressDecreasing = captureProgress < oldProgress;
+            const team1IsProgressOwner = sameTeam(ownerProgressTeam, TEAM_1);
+
+            if (progressIncreasing) {
+                team1ObjectiveState.capMessage = team1IsProgressOwner ? "CAPTURING" : "LOSING";
+                team2ObjectiveState.capMessage = team1IsProgressOwner ? "LOSING" : "CAPTURING";
+            } else if (progressDecreasing) {
+                team1ObjectiveState.capMessage = team1IsProgressOwner ? "LOSING" : "CAPTURING";
+                team2ObjectiveState.capMessage = team1IsProgressOwner ? "CAPTURING" : "LOSING";
             } else {
-                if (mod.GreaterThan(
-                    mod.GetCaptureProgress(eventInfo.eventCapturePoint),
-                    oldProgress)) {
-                    getTeamState(TEAM_1).capMessages.set(mod.GetObjId(flag), "LOSING")
-                    getTeamState(TEAM_2).capMessages.set(mod.GetObjId(flag), "CAPTURING")
-                } else if (mod.LessThan(
-                    mod.GetCaptureProgress(eventInfo.eventCapturePoint),
-                    oldProgress)) {
-                    getTeamState(TEAM_1).capMessages.set(mod.GetObjId(flag), "CAPTURING")
-                    getTeamState(TEAM_2).capMessages.set(mod.GetObjId(flag), "LOSING")
-                } else {
-                    getTeamState(TEAM_1).capMessages.set(mod.GetObjId(flag), "CONTESTED")
-                    getTeamState(TEAM_2).capMessages.set(mod.GetObjId(flag), "CONTESTED")
-                }
+                team1ObjectiveState.capMessage = "CONTESTED";
+                team2ObjectiveState.capMessage = "CONTESTED";
             }
+        } else if (sameTeam(ownerTeam, TEAM_1)) {
+            team1ObjectiveState.capMessage = "SECURED";
+            team2ObjectiveState.capMessage = "CONTESTED";
         } else {
-            if (mod.Equals(
-                mod.GetCurrentOwnerTeam(eventInfo.eventCapturePoint),
-                mod.GetTeam(1))) {
-                getTeamState(TEAM_1).capMessages.set(mod.GetObjId(flag), "SECURED")
-                getTeamState(TEAM_2).capMessages.set(mod.GetObjId(flag), "CONTESTED")
-            } else {
-                getTeamState(TEAM_1).capMessages.set(mod.GetObjId(flag), "CONTESTED")
-                getTeamState(TEAM_2).capMessages.set(mod.GetObjId(flag), "SECURED")
-            }
+            team1ObjectiveState.capMessage = "CONTESTED";
+            team2ObjectiveState.capMessage = "SECURED";
         }
     }
 
@@ -1010,9 +976,8 @@ class UIController {
         const player = eventInfo.eventPlayer;
         const capturePoint = eventInfo.eventCapturePoint;
         const playerState = getPlayerState(player);
-        const teamState = getTeamState(playerState.team);
-        const capturePointState = getObjectiveState(capturePoint);
-        const capturePointId = mod.GetObjId(capturePoint);
+        const objective = getObjectiveState(capturePoint);
+        const objectiveTeamState = objective.getTeamState(playerState.team);
         const captureProgress = mod.GetCaptureProgress(capturePoint);
         const ownerProgressTeam = mod.GetOwnerProgressTeam(capturePoint);
         const playerRoot = getPlayerRootWidget(player);
@@ -1020,13 +985,13 @@ class UIController {
         const objProgress = mod.FindUIWidgetWithName("ObjProgress", playerRoot);
         const objProgressBG = mod.FindUIWidgetWithName("ObjProgressBG", playerRoot);
 
-        mod.SetUIWidgetPosition(objProgress, capturePointState.uiPosition)
-        mod.SetUIWidgetSize(objProgress, capturePointState.uiSize)
-        mod.SetUITextColor(objText, teamState.capTextColour(capturePointId))
-        mod.SetUIWidgetBgColor(objText, teamState.capBGColour(capturePointId))
-        mod.SetUIWidgetBgColor(objProgressBG, teamState.capProgressColour(capturePointId))
+        mod.SetUIWidgetPosition(objProgress, objective.uiPosition)
+        mod.SetUIWidgetSize(objProgress, objective.uiSize)
+        mod.SetUITextColor(objText, objectiveTeamState.capTextColour)
+        mod.SetUIWidgetBgColor(objText, objectiveTeamState.capBGColour)
+        mod.SetUIWidgetBgColor(objProgressBG, objectiveTeamState.capProgressColour)
         mod.SetUIWidgetBgColor(objProgress, sameTeam(playerState.team, ownerProgressTeam) ? friendlyTextColour : enemyTextColour)
-        this.updateObjectiveUI(teamState.capMessage(capturePointId), eventInfo)
+        this.updateObjectiveUI(objectiveTeamState.capMessage, eventInfo)
 
         if (playerState.capturePointState !== captureProgress) {
             playerState.captureProgressTick += 1;
@@ -1491,16 +1456,17 @@ class CapturePointController {
         }
         await mod.Wait(mod.RandomReal(0, 1))
         const cpState = getObjectiveState(eventInfo.eventCapturePoint);
+        if (!cpState) return;
+
         cpState.progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
         cpState.setProgressVisuals(cpState.progress);
         while (true) {
             uiController.flashCaptureProgressUI(eventInfo.eventCapturePoint, capturePointFlash)
-            if (mod.NotEqualTo(getObjectiveState(eventInfo.eventCapturePoint).progress, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
-                const cpState = getObjectiveState(eventInfo.eventCapturePoint);
+            if (mod.NotEqualTo(cpState.progress, mod.GetCaptureProgress(eventInfo.eventCapturePoint))) {
                 cpState.setProgressVisuals(mod.GetCaptureProgress(eventInfo.eventCapturePoint));
                 uiController.manageCapturePointUI(eventInfo.eventCapturePoint, cpState.progress, eventInfo)
             }
-            getObjectiveState(eventInfo.eventCapturePoint).progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
+            cpState.progress = mod.GetCaptureProgress(eventInfo.eventCapturePoint);
             await mod.Wait(0.1)
         }
     }
@@ -1559,8 +1525,7 @@ class CapturePointController {
     }
 
     private updatePlayersOnPointForTeam(capturePoint: mod.CapturePoint, team: mod.Team, playersOnPoint = mod.GetPlayersOnPoint(capturePoint)): void {
-        const capturePointId = mod.GetObjId(capturePoint);
-        getTeamState(team).playersOnPoints.set(capturePointId, this.countAlivePlayersOnPointForTeam(playersOnPoint, team))
+        getObjectiveState(capturePoint).setPlayersOnPoint(team, this.countAlivePlayersOnPointForTeam(playersOnPoint, team))
     }
 
     private countAlivePlayersOnPointForTeam(playersOnPoint: mod.Array, team: mod.Team): number {
@@ -2043,6 +2008,8 @@ class ConquestGame {
     }
 
     async setupMap(): Promise<void> {
+        await waitForObjectiveRegistry()
+
         const spawnAudio = (asset: mod.RuntimeSpawn_Common) => mod.SpawnObject(asset, ZERO_VECTOR, ZERO_VECTOR, ZERO_VECTOR);
         const firstObjective = getFirstObjective();
 
