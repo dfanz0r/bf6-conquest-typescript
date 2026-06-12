@@ -3115,81 +3115,63 @@ function runCaptureProgressRule(eventInfo: CapturePointEventInfo) {
 }
 
 function aiScoutOnSpawnerSpawnedRule(eventInfo: PlayerEventInfo) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIScoutOnSpawnerSpawned);
-    const state = true;
-    if (condition.update(state)) {
-        aiController.deployScout(eventInfo);
-    }
+    // Event rules in Portal run every time the event fires. These AI hooks were previously
+    // edge-gated with ConditionState, which meant each bot only deployed/scouted/retargeted
+    // once until the condition happened to be evaluated false. That made respawns and repeated
+    // movement/combat events go stale compared with the original JSON rule behavior.
+    aiController.deployScout(eventInfo);
 }
 
 function aiFindNewObjectiveRule(eventInfo: PlayerCapturePointEventInfo) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIFindNewObjective);
-    const state = aiController.shouldFindNewObjective(eventInfo);
-    if (condition.update(state)) {
+    if (aiController.shouldFindNewObjective(eventInfo)) {
         aiController.findNewObjective(eventInfo);
     }
 }
 
 function aiReadyForAttackRule(eventInfo: PlayerEventInfo) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIReadyForAttack);
-    const state = aiController.shouldReadyForAttack(eventInfo);
-    if (condition.update(state)) {
+    if (aiController.shouldReadyForAttack(eventInfo)) {
         aiController.readyForAttack(eventInfo);
     }
 }
 
 function aiTargetDamagerRule(eventInfo: PlayerCombatEventInfo) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetDamager);
-    const state = aiController.shouldTargetDamager(eventInfo);
-    if (condition.update(state)) {
+    if (aiController.shouldTargetDamager(eventInfo)) {
         aiController.targetDamager(eventInfo);
     }
 }
 
 function aiExitVehicleRule(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIExitVehicle);
-    const state = aiController.shouldExitVehicle(eventInfo);
-    if (condition.update(state)) {
+    if (aiController.shouldExitVehicle(eventInfo)) {
         aiController.exitVehicle(eventInfo);
     }
 }
 
 function aiEnterVehicleRule(eventInfo: { eventPlayer: mod.Player; eventVehicle: mod.Vehicle }) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIEnterVehicle);
-    const state = aiController.shouldEnterVehicle(eventInfo);
-    if (condition.update(state)) {
+    if (aiController.shouldEnterVehicle(eventInfo)) {
         aiController.enterVehicle(eventInfo);
     }
 }
 
 function aiRetryMoveRule(eventInfo: PlayerEventInfo) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIRetryMove);
-    const state = aiController.shouldRetryMove(eventInfo);
-    if (condition.update(state)) {
+    if (aiController.shouldRetryMove(eventInfo)) {
         aiController.retryMove(eventInfo);
     }
 }
 
 function aiMoveSucceededRule(eventInfo: PlayerEventInfo) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AIMoveSucceeded);
-    const state = aiController.shouldMoveSucceeded(eventInfo);
-    if (condition.update(state)) {
+    if (aiController.shouldMoveSucceeded(eventInfo)) {
         aiController.moveSucceeded(eventInfo);
     }
 }
 
 function aiTargetOnKillRule(eventInfo: PlayerCombatEventInfo) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetOnKill);
-    const state = aiController.shouldTargetOnKill(eventInfo);
-    if (condition.update(state)) {
+    if (aiController.shouldTargetOnKill(eventInfo)) {
         aiController.targetOnKill(eventInfo);
     }
 }
 
 function aiTargetOnKillAssistRule(eventInfo: PlayerCombatEventInfo) {
-    const condition = getPlayerCondition(eventInfo.eventPlayer, PlayerConditionSlot.AITargetOnKillAssist);
-    const state = aiController.shouldTargetOnKillAssist(eventInfo);
-    if (condition.update(state)) {
+    if (aiController.shouldTargetOnKillAssist(eventInfo)) {
         aiController.targetOnKillAssist(eventInfo);
     }
 }
