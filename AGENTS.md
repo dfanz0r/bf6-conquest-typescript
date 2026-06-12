@@ -43,6 +43,7 @@ Notes:
 - Portal/native object handles are opaque. Do not rely on broad truthiness checks like `if (vehicle)` for Portal handles.
 - Guard optional Portal handles with nullish checks only (`value !== undefined && value !== null`) or the local `isDefined(...)` helper.
 - Native Portal calls may throw/report errors if passed `undefined` or `null`; guard before passing maybe-missing handles to native APIs.
+- `await mod.Wait(0)` yields until the next Portal tick. Prefer it over arbitrary small waits when the intent is only to retry on the next tick.
 
 ## Portal handle behavior notes
 
