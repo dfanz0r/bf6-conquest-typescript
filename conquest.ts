@@ -1,10 +1,16 @@
-// ============================================================
-// CONFIG
-// ============================================================
-
+// Originally Created by andy6170 / ViperStudiosAndy
+// Typescript port by dfanz0r
 // Portal template reference links:
 // - Tutorial: https://youtu.be/DjimxXccEHY
 // - Code deep dive: https://youtu.be/DwC6l0i5fuQ?si=NQrM78Svog99bMYg
+
+// ============================================================
+//                            CONFIG
+// ============================================================
+
+// Tweak these values to change game behavior.
+// Flags can be used to toggle features on/off without code changes.
+// Adjust values and flags as needed for your map and game mode design.
 
 const CONFIG = {
     // Portal text: set the game time limit.
